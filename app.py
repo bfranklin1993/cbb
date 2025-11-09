@@ -432,6 +432,11 @@ def show_schedule(team):
     st.markdown("### SEASON SCHEDULE")
 
     season = st.session_state.current_season
+
+    if not season:
+        st.info("Schedule will be generated when you start the season")
+        return
+
     schedule = season.get_team_schedule(team)
 
     if not schedule:
@@ -573,24 +578,42 @@ def recruiting_page():
         # Show recruits with high interest (50+)
         recruits = [r for r in rc.get_available_recruits() if r.interest >= 50]
         recruits.sort(key=lambda r: r.interest, reverse=True)
-        recruits = recruits[:30]
-        st.caption("Showing recruits with 50+ interest")
+        recruits = recruits[:50]
+        st.caption("Showing top 50 recruits with 50+ interest")
     else:
         # Show all recruits with filters
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
             position = st.selectbox("Position:", ["All", "PG", "SG", "SF", "PF", "C"])
         with col2:
             stars = st.selectbox("Stars:", ["All", "5⭐", "4⭐", "3⭐", "2⭐"])
+        with col3:
+            sort_by = st.selectbox("Sort by:", ["Rank", "Interest", "Stars"])
+
+        # Search box
+        search_name = st.text_input("🔍 Search by name:", "").strip().lower()
 
         pos_filter = None if position == "All" else position
         recruits = rc.get_available_recruits(pos_filter)
 
+        # Apply filters
         if stars != "All":
             star_val = int(stars[0])
             recruits = [r for r in recruits if r.stars == star_val]
 
-        recruits = recruits[:50]
+        if search_name:
+            recruits = [r for r in recruits if search_name in r.name.lower()]
+
+        # Sort
+        if sort_by == "Rank":
+            recruits.sort(key=lambda r: r.ranking)
+        elif sort_by == "Interest":
+            recruits.sort(key=lambda r: r.interest, reverse=True)
+        elif sort_by == "Stars":
+            recruits.sort(key=lambda r: r.stars, reverse=True)
+
+        recruits = recruits[:100]  # Show top 100
+        st.caption(f"Showing {len(recruits)} recruits")
 
     if not recruits:
         st.info("No recruits available.")

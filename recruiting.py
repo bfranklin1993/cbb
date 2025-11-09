@@ -226,27 +226,33 @@ class Recruit:
         """Scout a player - increases interest slightly, reveals more info"""
         self.times_scouted += 1
 
-        # Small interest boost
+        # Small interest boost - reduced from original
         team_fit = self.calculate_team_fit(team)
-        interest_boost = random.randint(2, 5) + (team_fit / 20)  # 2-10 points
+        base_boost = random.uniform(1, 3)  # 1-3 base
+        fit_bonus = team_fit / 40  # 0-2.5 based on fit
+        interest_boost = base_boost + fit_bonus  # Total: 1-5.5 points
         self.interest = min(100, self.interest + interest_boost)
 
     def visit_action(self, team: Team):
         """Visit a player - significant interest boost"""
         self.times_visited += 1
 
-        # Bigger interest boost based on team fit
+        # Bigger interest boost based on team fit - reduced from original
         team_fit = self.calculate_team_fit(team)
-        interest_boost = random.randint(5, 10) + (team_fit / 10)  # 10-20 points
+        base_boost = random.uniform(3, 6)  # 3-6 base
+        fit_bonus = team_fit / 20  # 0-5 based on fit
+        interest_boost = base_boost + fit_bonus  # Total: 3-11 points
         self.interest = min(100, self.interest + interest_boost)
 
     def offer_scholarship(self, team: Team):
         """Offer scholarship - required before player can commit"""
         self.scholarship_offered = True
 
-        # Interest boost for being offered
+        # Interest boost for being offered - reduced from original
         team_fit = self.calculate_team_fit(team)
-        interest_boost = random.randint(3, 8) + (team_fit / 15)  # 8-15 points
+        base_boost = random.uniform(2, 5)  # 2-5 base
+        fit_bonus = team_fit / 25  # 0-4 based on fit
+        interest_boost = base_boost + fit_bonus  # Total: 2-9 points
         self.interest = min(100, self.interest + interest_boost)
 
     def can_commit(self, team: Team) -> bool:
@@ -257,9 +263,21 @@ class Recruit:
         if self.committed:
             return False
 
-        # Need at least 65 interest to commit (varies by team fit)
+        # Elite recruits (5-star, top 100) have higher standards
         team_fit = self.calculate_team_fit(team)
-        required_interest = max(50, 80 - (team_fit / 4))  # 55-80 based on fit
+
+        # Base required interest varies by recruit quality
+        if self.stars == 5 or self.ranking <= 20:  # Top 20 recruits
+            base_required = 90
+        elif self.stars == 4 or self.ranking <= 100:  # Top 100 recruits
+            base_required = 85
+        elif self.stars == 3 or self.ranking <= 300:  # Top 300 recruits
+            base_required = 75
+        else:
+            base_required = 65
+
+        # Reduce required interest based on team fit (max -20)
+        required_interest = max(70, base_required - (team_fit / 5))
 
         return self.interest >= required_interest
 
@@ -268,16 +286,35 @@ class Recruit:
         if not self.can_commit(team):
             return False
 
-        # Success based on interest level
-        success_chance = self.interest
+        # Success chance - not guaranteed even at high interest
+        # Elite recruits are pickier
+        team_fit = self.calculate_team_fit(team)
+
+        if self.stars == 5 or self.ranking <= 20:  # Top tier
+            # Need ELITE prestige or very high fit to have good chance
+            if team.prestige in ["ELITE", "HIGH"]:
+                base_chance = 70
+            else:
+                base_chance = 30  # Low prestige schools struggle with top recruits
+        elif self.stars == 4 or self.ranking <= 100:
+            if team.prestige in ["ELITE", "HIGH", "UPPER_MID"]:
+                base_chance = 75
+            else:
+                base_chance = 45
+        else:
+            base_chance = 80
+
+        # Add interest bonus (max +20)
+        interest_bonus = (self.interest - 70) / 2  # 0-15 bonus
+        success_chance = min(95, base_chance + interest_bonus + (team_fit / 10))
 
         if random.uniform(0, 100) < success_chance:
             self.committed = True
             self.committed_to = team.name
             return True
 
-        # Failed - slight interest decrease
-        self.interest = max(0, self.interest - random.randint(3, 8))
+        # Failed - interest decrease
+        self.interest = max(0, self.interest - random.randint(5, 12))
         return False
 
     def to_player(self) -> Player:
