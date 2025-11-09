@@ -340,7 +340,8 @@ def dashboard_page():
                 for game in upcoming:
                     location = "vs" if game['is_home'] else "@"
                     game_type = " (CONF)" if game['is_conference'] else ""
-                    game_date = season.week_to_date(game['week'] - 1)
+                    day_offset = game.get('day_offset', 0)
+                    game_date = season.week_to_date(game['week'] - 1, day_offset)
                     st.text(f"{game_date}: {location} {game['opponent']}{game_type}")
 
 
@@ -520,7 +521,8 @@ def show_schedule(team):
             result_text = "W" if won else "L"
             location = "vs" if game['is_home'] else "@"
             conf_tag = " (CONF)" if game['is_conference'] else ""
-            game_date = season.week_to_date(game['week'] - 1)  # week is 1-indexed
+            day_offset = game.get('day_offset', 0)
+            game_date = season.week_to_date(game['week'] - 1, day_offset)  # week is 1-indexed
 
             score_display = f"{game.get('team_score', 0)}-{game.get('opp_score', 0)}"
 
@@ -538,7 +540,8 @@ def show_schedule(team):
         for game in upcoming[:10]:  # Show next 10 games
             location = "vs" if game['is_home'] else "@"
             conf_tag = " (CONF)" if game['is_conference'] else ""
-            game_date = season.week_to_date(game['week'] - 1)  # week is 1-indexed
+            day_offset = game.get('day_offset', 0)
+            game_date = season.week_to_date(game['week'] - 1, day_offset)  # week is 1-indexed
 
             st.markdown(
                 f'<div style="padding: 10px; margin: 5px 0; border-left: 3px solid #888; background-color: #1a1a1a;">'

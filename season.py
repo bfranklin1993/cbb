@@ -102,13 +102,27 @@ class Season:
 
             for week_idx in range(0, 8):  # Weeks 1-8 (Nov-Dec)
                 week_teams = {}
+                week_team_days = {}  # Track which days teams are playing
                 for g in self.schedule[week_idx]:
                     week_teams[g[0].name] = week_teams.get(g[0].name, 0) + 1
                     week_teams[g[1].name] = week_teams.get(g[1].name, 0) + 1
+                    # Track days each team is playing
+                    if len(g) > 3:  # Has day_offset
+                        week_team_days.setdefault(g[0].name, set()).add(g[3])
+                        week_team_days.setdefault(g[1].name, set()).add(g[3])
 
                 # Each team can play up to 2 games per week
                 if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
-                    self.schedule[week_idx].append(game)
+                    # Assign day: if first game, use Tue/Wed (1-2), if second game, use Sat (5)
+                    home_games_this_week = week_teams.get(home_team.name, 0)
+                    away_games_this_week = week_teams.get(away_team.name, 0)
+
+                    if home_games_this_week == 0 and away_games_this_week == 0:
+                        day_offset = random.choice([1, 2])  # Tuesday or Wednesday
+                    else:
+                        day_offset = 5  # Saturday for second game
+
+                    self.schedule[week_idx].append((home_team, away_team, is_conf, day_offset))
                     break
 
         # Schedule conference games in weeks 9-18
@@ -117,13 +131,27 @@ class Season:
 
             for week_idx in range(8, 18):  # Weeks 9-18 (Jan-Mar)
                 week_teams = {}
+                week_team_days = {}  # Track which days teams are playing
                 for g in self.schedule[week_idx]:
                     week_teams[g[0].name] = week_teams.get(g[0].name, 0) + 1
                     week_teams[g[1].name] = week_teams.get(g[1].name, 0) + 1
+                    # Track days each team is playing
+                    if len(g) > 3:  # Has day_offset
+                        week_team_days.setdefault(g[0].name, set()).add(g[3])
+                        week_team_days.setdefault(g[1].name, set()).add(g[3])
 
                 # Each team can play up to 2 games per week
                 if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
-                    self.schedule[week_idx].append(game)
+                    # Assign day: if first game, use Tue/Wed (1-2), if second game, use Sat (5)
+                    home_games_this_week = week_teams.get(home_team.name, 0)
+                    away_games_this_week = week_teams.get(away_team.name, 0)
+
+                    if home_games_this_week == 0 and away_games_this_week == 0:
+                        day_offset = random.choice([1, 2])  # Tuesday or Wednesday
+                    else:
+                        day_offset = 5  # Saturday for second game
+
+                    self.schedule[week_idx].append((home_team, away_team, is_conf, day_offset))
                     break
 
     def simulate_week(self) -> List[dict]:
@@ -135,7 +163,14 @@ class Season:
         week_games = self.schedule[self.current_week]
         results = []
 
-        for home_team, away_team, is_conference in week_games:
+        for game_tuple in week_games:
+            # Handle both old (3-tuple) and new (4-tuple with day_offset) formats
+            if len(game_tuple) >= 4:
+                home_team, away_team, is_conference, day_offset = game_tuple[:4]
+            else:
+                home_team, away_team, is_conference = game_tuple
+                day_offset = 0
+
             result = self.game_engine.simulate_game_with_details(
                 home_team, away_team, is_conference
             )
@@ -174,7 +209,14 @@ class Season:
         team_schedule = []
 
         for week_idx, week_games in enumerate(self.schedule):
-            for home_team, away_team, is_conference in week_games:
+            for game_tuple in week_games:
+                # Handle both old (3-tuple) and new (4-tuple with day_offset) formats
+                if len(game_tuple) >= 4:
+                    home_team, away_team, is_conference, day_offset = game_tuple[:4]
+                else:
+                    home_team, away_team, is_conference = game_tuple
+                    day_offset = 0
+
                 if home_team.name == team.name or away_team.name == team.name:
                     is_home = home_team.name == team.name
                     opponent = away_team if is_home else home_team
@@ -184,6 +226,7 @@ class Season:
 
                     game_info = {
                         'week': week_idx + 1,
+                        'day_offset': day_offset,
                         'opponent': opponent.name,
                         'is_home': is_home,
                         'is_conference': is_conference,
@@ -213,7 +256,14 @@ class Season:
     def get_next_game_for_team(self, team: Team) -> dict:
         """Get the next unplayed game for a specific team"""
         for week_idx in range(self.current_week, self.total_weeks):
-            for home_team, away_team, is_conference in self.schedule[week_idx]:
+            for game_tuple in self.schedule[week_idx]:
+                # Handle both old (3-tuple) and new (4-tuple with day_offset) formats
+                if len(game_tuple) >= 4:
+                    home_team, away_team, is_conference, day_offset = game_tuple[:4]
+                else:
+                    home_team, away_team, is_conference = game_tuple
+                    day_offset = 0
+
                 if home_team.name == team.name or away_team.name == team.name:
                     is_home = home_team.name == team.name
                     opponent = away_team if is_home else home_team
@@ -225,7 +275,8 @@ class Season:
                         'opponent': opponent,
                         'is_home': is_home,
                         'is_conference': is_conference,
-                        'date': self.week_to_date(week_idx)
+                        'day_offset': day_offset,
+                        'date': self.week_to_date(week_idx, day_offset)
                     }
         return None
 
@@ -250,19 +301,23 @@ class Season:
 
         return None
 
-    def week_to_date(self, week: int) -> str:
-        """Convert week number to a calendar date string"""
+    def week_to_date(self, week: int, day_offset: int = 0) -> str:
+        """Convert week number and day offset to a calendar date string
+
+        Args:
+            week: Week number (0-17)
+            day_offset: Day of week (0=Mon, 1=Tue, 2=Wed, 5=Sat, etc.)
+        """
         from datetime import datetime, timedelta
 
         # Season starts first Monday of November
         # 2025 season starts Nov 3, 2025
         season_start = datetime(self.year, 11, 3)  # First Monday in November
 
-        # Each week is 7 days, but games can be on different days
-        # For simplicity, we'll show the Monday of each week
-        week_start = season_start + timedelta(weeks=week)
+        # Calculate date: week start + day offset
+        game_date = season_start + timedelta(weeks=week, days=day_offset)
 
-        return week_start.strftime("%b %d")
+        return game_date.strftime("%b %d")
 
     def display_scoreboard(self, results: List[dict]):
         """Display game results"""
