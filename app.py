@@ -305,10 +305,16 @@ def dashboard_page():
                         st.session_state.last_results = [result]
                     # Reset recruiting actions (get 5 actions per game)
                     st.session_state.recruiting_actions_remaining = 5
+                    # Update recruit interest levels each week
+                    if st.session_state.recruiting_class is not None:
+                        st.session_state.recruiting_class.update_weekly_interest()
                     st.rerun()
             with col2:
                 if st.button("⏩ SIM TO END", use_container_width=True):
                     season.simulate_full_season()
+                    # Update recruit interest levels after simulating multiple weeks
+                    if st.session_state.recruiting_class is not None:
+                        st.session_state.recruiting_class.update_weekly_interest()
                     st.rerun()
 
             # Recent results

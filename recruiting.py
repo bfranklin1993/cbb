@@ -226,11 +226,11 @@ class Recruit:
         """Scout a player - increases interest slightly, reveals more info"""
         self.times_scouted += 1
 
-        # Small interest boost - reduced from original
+        # Minimal interest boost - scouting is mainly for info gathering
         team_fit = self.calculate_team_fit(team)
-        base_boost = random.uniform(1, 3)  # 1-3 base
-        fit_bonus = team_fit / 40  # 0-2.5 based on fit
-        interest_boost = base_boost + fit_bonus  # Total: 1-5.5 points
+        base_boost = random.uniform(0.5, 1.0)  # 0.5-1 base
+        fit_bonus = team_fit / 200  # 0-0.5 based on fit
+        interest_boost = base_boost + fit_bonus  # Total: 0.5-1.5 points
         self.interest = min(100, self.interest + interest_boost)
 
     def visit_action(self, team: Team):
@@ -439,6 +439,34 @@ class RecruitingClass:
 
         return available
 
+    def update_weekly_interest(self):
+        """Update recruit interest levels each week
+
+        Interest naturally fluctuates as recruits consider their options,
+        learn more about schools, and are influenced by the season.
+        """
+        for recruit in self.recruits:
+            if recruit.committed:
+                continue
+
+            # Small random fluctuation (-2 to +2)
+            base_change = random.uniform(-2, 2)
+
+            # Slight decay if interest is very high (keeps things realistic)
+            # Players at 90+ interest will slowly drift down unless actively recruited
+            if recruit.interest > 90:
+                decay = random.uniform(-1, -0.5)
+            elif recruit.interest > 80:
+                decay = random.uniform(-0.5, 0)
+            else:
+                decay = 0
+
+            # Apply changes
+            interest_change = base_change + decay
+
+            # Update interest with bounds (keep between 20 and 100)
+            recruit.interest = max(20, min(100, recruit.interest + interest_change))
+
     def recruit_player(self, recruit: Recruit, team: Team) -> bool:
         """
         Attempt to recruit a player
@@ -472,31 +500,104 @@ class RecruitingClass:
 
 
 def recruit_players_auto(team: Team, recruiting_class: RecruitingClass, slots: int):
-    """Auto-recruit players for CPU teams"""
+    """Auto-recruit players for CPU teams - smarter about scholarship limits"""
     recruited = []
 
-    available = recruiting_class.get_available_recruits()
+    if slots <= 0:
+        return recruited
 
-    # Prefer recruits based on team rating
+    available = recruiting_class.get_available_recruits()
     team_rating = team.get_team_rating()
 
+    # Determine realistic recruiting targets based on prestige
+    # Top teams can be pickier, lower teams need to cast wider net
+    prestige_multipliers = {
+        "ELITE": 2.5,      # Duke/UNC pursue 2.5x their spots
+        "HIGH": 3.0,       # Good teams pursue 3x
+        "UPPER_MID": 3.5,  # Mid-major powers pursue 3.5x
+        "MID": 4.0,        # Average teams pursue 4x
+        "LOW_MID": 4.5,    # Worse teams need more targets
+        "LOW": 5.0         # Bottom teams need many targets
+    }
+
+    max_targets = int(slots * prestige_multipliers.get(team.prestige, 3.5))
+    targets_found = 0
+
+    # Build interest in realistic recruits (don't offer to everyone)
+    for recruit in available:
+        if targets_found >= max_targets:
+            break
+
+        team_fit = recruit.calculate_team_fit(team)
+
+        # Determine if this recruit is a realistic target
+        realistic_target = False
+
+        if recruit.stars == 5 or recruit.ranking <= 20:
+            # Top recruits - only elite/high prestige teams pursue
+            if team.prestige in ["ELITE", "HIGH"] and team_fit > 70:
+                realistic_target = random.random() < 0.4
+        elif recruit.stars == 4 or recruit.ranking <= 100:
+            # 4-star recruits - elite/high/upper-mid pursue
+            if team.prestige in ["ELITE", "HIGH"]:
+                realistic_target = random.random() < 0.6 if team_fit > 60 else random.random() < 0.3
+            elif team.prestige in ["UPPER_MID"] and team_fit > 65:
+                realistic_target = random.random() < 0.5
+        elif recruit.stars == 3 or recruit.ranking <= 300:
+            # 3-star recruits - all teams can pursue
+            if team.prestige in ["ELITE", "HIGH"]:
+                realistic_target = random.random() < 0.3  # Less focus on 3-stars
+            elif team.prestige in ["UPPER_MID", "MID"]:
+                realistic_target = random.random() < 0.6 if team_fit > 50 else random.random() < 0.4
+            else:
+                realistic_target = random.random() < 0.7 if team_fit > 50 else random.random() < 0.5
+        else:
+            # 2-star recruits - mainly lower tier teams
+            if team.prestige in ["MID", "LOW_MID", "LOW"]:
+                realistic_target = random.random() < 0.8 if team_fit > 40 else random.random() < 0.6
+
+        if realistic_target:
+            targets_found += 1
+            # Build interest through simulated recruiting actions
+            recruit.interest = max(recruit.interest, 50 + (team_fit / 4))
+
+    # Actually commit recruits based on interest and fit
     for recruit in available:
         if len(recruited) >= slots:
             break
 
-        # Better teams get better recruits
-        if team_rating >= 7.5 and recruit.potential >= 7:
-            if random.random() < 0.6:
-                recruit.committed = True
-                recruit.committed_to = team.name
-                recruited.append(recruit)
-        elif team_rating >= 6.0 and recruit.potential >= 5:
-            if random.random() < 0.5:
-                recruit.committed = True
-                recruit.committed_to = team.name
-                recruited.append(recruit)
-        elif recruit.potential >= 3:
-            if random.random() < 0.4:
+        team_fit = recruit.calculate_team_fit(team)
+
+        # Check if recruit is interested enough and team has good fit
+        if recruit.interest >= 65 and team_fit > 60:
+            # Success chance based on prestige, fit, and recruit quality
+            base_chance = 0.3
+
+            if recruit.stars == 5 or recruit.ranking <= 20:
+                if team.prestige in ["ELITE"]:
+                    base_chance = 0.6
+                elif team.prestige in ["HIGH"]:
+                    base_chance = 0.4
+                else:
+                    base_chance = 0.1
+            elif recruit.stars == 4 or recruit.ranking <= 100:
+                if team.prestige in ["ELITE", "HIGH"]:
+                    base_chance = 0.6
+                elif team.prestige in ["UPPER_MID"]:
+                    base_chance = 0.5
+                else:
+                    base_chance = 0.3
+            else:
+                if team.prestige in ["ELITE", "HIGH"]:
+                    base_chance = 0.8
+                else:
+                    base_chance = 0.6
+
+            # Add fit bonus
+            fit_bonus = (team_fit - 60) / 100  # 0-0.4 bonus
+            success_chance = base_chance + fit_bonus
+
+            if random.random() < success_chance:
                 recruit.committed = True
                 recruit.committed_to = team.name
                 recruited.append(recruit)
