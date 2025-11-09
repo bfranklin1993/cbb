@@ -244,6 +244,8 @@ def dashboard_page():
                     result = season.simulate_to_next_game(team)
                     if result:
                         st.session_state.last_results = [result]
+                    # Reset recruiting actions (get 5 actions per game)
+                    st.session_state.recruiting_actions_remaining = 5
                     st.rerun()
             with col2:
                 if st.button("⏩ SIM TO END", use_container_width=True):
@@ -525,7 +527,7 @@ def league_page():
 
 
 def recruiting_page():
-    """Recruiting"""
+    """Recruiting with actions system"""
     team = st.session_state.player_team
 
     st.markdown("## RECRUITING")
@@ -539,38 +541,56 @@ def recruiting_page():
             st.session_state.current_year + 1,
             len(st.session_state.all_teams)
         )
+        # Initialize team fit and starting interest for all recruits
+        for recruit in st.session_state.recruiting_class.recruits:
+            team_fit = recruit.calculate_team_fit(team)
+            # Adjust starting interest based on team fit
+            recruit.interest = 50 + (team_fit / 4)  # 50-75 starting interest
+
+    # Initialize recruiting actions per week (resets each week)
+    if not hasattr(st.session_state, 'recruiting_actions_remaining'):
+        st.session_state.recruiting_actions_remaining = 5
 
     rc = st.session_state.recruiting_class
     commits = [r for r in rc.recruits if r.committed and r.committed_to == team.name]
     available_spots = graduating_seniors - len(commits)
 
-    st.info(f"Class of {st.session_state.current_year + 1} • {graduating_seniors} seniors graduating • {len(commits)} commits • {available_spots} spots left")
-
-    # Quick action
-    if available_spots > 0:
-        if st.button("AUTO-FILL ROSTER", type="primary"):
-            recruited = recruit_players_auto(team, rc, available_spots)
-            for recruit in recruited:
-                player = recruit.to_player()
-                team.roster.append(player)
-
-            # Other teams recruit
-            for t in st.session_state.all_teams:
-                if t != team:
-                    spots = 12 - len(t.roster)
-                    if spots > 0:
-                        recruit_players_auto(t, rc, min(spots, 3))
-
-            st.success(f"Recruited {len(recruited)} players!")
-            st.rerun()
+    # Header info
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("ACTIONS LEFT", f"{st.session_state.recruiting_actions_remaining}/5")
+    with col2:
+        st.metric("COMMITS", f"{len(commits)}/{graduating_seniors}")
+    with col3:
+        st.metric("SPOTS LEFT", available_spots)
 
     st.markdown("---")
 
-    # Filter
-    position = st.selectbox("Filter by Position:", ["All", "PG", "SG", "SF", "PF", "C"])
-    pos_filter = None if position == "All" else position
+    # View toggle
+    view = st.radio("", ["Recommended", "Search All"], horizontal=True)
 
-    recruits = rc.get_available_recruits(pos_filter)[:50]
+    if view == "Recommended":
+        # Show recruits with high interest (50+)
+        recruits = [r for r in rc.get_available_recruits() if r.interest >= 50]
+        recruits.sort(key=lambda r: r.interest, reverse=True)
+        recruits = recruits[:30]
+        st.caption("Showing recruits with 50+ interest")
+    else:
+        # Show all recruits with filters
+        col1, col2 = st.columns(2)
+        with col1:
+            position = st.selectbox("Position:", ["All", "PG", "SG", "SF", "PF", "C"])
+        with col2:
+            stars = st.selectbox("Stars:", ["All", "5⭐", "4⭐", "3⭐", "2⭐"])
+
+        pos_filter = None if position == "All" else position
+        recruits = rc.get_available_recruits(pos_filter)
+
+        if stars != "All":
+            star_val = int(stars[0])
+            recruits = [r for r in recruits if r.stars == star_val]
+
+        recruits = recruits[:50]
 
     if not recruits:
         st.info("No recruits available.")
@@ -584,47 +604,99 @@ def recruiting_page():
             "Name": r.name,
             "Pos": r.position,
             "Stars": "⭐" * r.stars,
-            "Interest": f"{r.interest}%"
+            "State": r.state,
+            "Offense": r.get_offense_rating(),
+            "Defense": r.get_defense_rating(),
+            "Fundamentals": r.get_fundamentals_rating(),
+            "Interest": f"{int(r.interest)}%"
         })
 
     df = pd.DataFrame(recruit_data)
-    st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+    st.dataframe(df, use_container_width=True, hide_index=True, height=350)
 
     # Show commits
     if commits:
-        with st.expander(f"YOUR COMMITS ({len(commits)})"):
+        with st.expander(f"YOUR COMMITS ({len(commits)})", expanded=False):
             for commit in commits:
-                st.text(f"{'⭐' * commit.stars} {commit.name} ({commit.position}) - #{commit.ranking}")
+                st.text(f"{'⭐' * commit.stars} {commit.name} ({commit.position}) - #{commit.ranking} - {commit.state}")
 
-    # Recruit selection
-    recruit_names = [f"{r.name} ({r.position})" for r in recruits[:20]]
-    selected = st.selectbox("Select recruit:", [""] + recruit_names)
+    st.markdown("---")
+
+    # Recruit selection and actions
+    recruit_names = [f"#{r.ranking} {r.name} ({r.position}, {r.state})" for r in recruits[:30]]
+    selected = st.selectbox("Select recruit for actions:", [""] + recruit_names)
 
     if selected:
         idx = recruit_names.index(selected)
         recruit = recruits[idx]
 
-        col1, col2 = st.columns(2)
+        # Recruit details
+        col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown(f"**{recruit.name}**")
-            st.text(f"#{recruit.ranking} {recruit.position}")
+            st.markdown(f"### {recruit.name}")
+            st.text(f"#{recruit.ranking} • {recruit.position} • {recruit.state}")
             st.text(f"{'⭐' * recruit.stars}")
 
         with col2:
-            st.text(f"Interest: {recruit.interest}%")
-            st.progress(recruit.interest / 100)
+            st.markdown("### Ratings")
+            st.text(f"Offense: {recruit.get_offense_rating()}")
+            st.text(f"Defense: {recruit.get_defense_rating()}")
+            st.text(f"Fundamentals: {recruit.get_fundamentals_rating()}")
 
-        if st.button(f"RECRUIT {recruit.name}", type="primary"):
-            if available_spots <= 0:
-                st.error("No scholarship spots available!")
-            else:
-                success = rc.recruit_player(recruit, team)
-                if success:
-                    st.success(f"✅ {recruit.name} committed!")
-                else:
-                    st.error(f"❌ {recruit.name} declined")
+        with col3:
+            st.markdown("### Interest")
+            st.progress(recruit.interest / 100)
+            st.text(f"{int(recruit.interest)}%")
+
+        st.markdown("---")
+
+        # Actions
+        st.markdown("### RECRUITING ACTIONS")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if st.button("🔍 SCOUT", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0):
+                recruit.scout_action(team)
+                st.session_state.recruiting_actions_remaining -= 1
+                st.success(f"Scouted {recruit.name} (Interest: {int(recruit.interest)}%)")
                 st.rerun()
+
+        with col2:
+            if st.button("✈️ VISIT", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0):
+                recruit.visit_action(team)
+                st.session_state.recruiting_actions_remaining -= 1
+                st.success(f"Visited {recruit.name} (Interest: {int(recruit.interest)}%)")
+                st.rerun()
+
+        with col3:
+            if recruit.scholarship_offered:
+                st.button("✅ OFFERED", use_container_width=True, disabled=True)
+            else:
+                if st.button("📜 OFFER", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0 or available_spots <= 0):
+                    recruit.offer_scholarship(team)
+                    st.session_state.recruiting_actions_remaining -= 1
+                    st.success(f"Offered scholarship to {recruit.name}!")
+                    st.rerun()
+
+        # Commit attempt
+        if recruit.scholarship_offered and recruit.can_commit(team):
+            st.markdown("---")
+            if st.button(f"🎯 ATTEMPT TO CLOSE COMMITMENT", type="primary", use_container_width=True):
+                success = recruit.attempt_commit(team)
+                if success:
+                    st.success(f"🎉 {recruit.name} COMMITTED!")
+                    player = recruit.to_player()
+                    team.roster.append(player)
+                else:
+                    st.error(f"❌ {recruit.name} is not ready to commit yet (Interest: {int(recruit.interest)}%)")
+                st.rerun()
+        elif recruit.scholarship_offered:
+            st.caption(f"Need higher interest to commit (currently {int(recruit.interest)}%)")
+
+        # Show recruiting history
+        st.caption(f"Scouted: {recruit.times_scouted}x • Visited: {recruit.times_visited}x • Offered: {'Yes' if recruit.scholarship_offered else 'No'}")
 
 
 def run_postseason_tournaments():
