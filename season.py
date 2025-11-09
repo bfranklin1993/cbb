@@ -21,61 +21,72 @@ class Season:
         self.total_weeks = 15  # ~15 weeks of regular season
 
     def generate_schedule(self):
-        """Generate the season schedule"""
-        self.schedule = []
-        scheduled_matchups = set()  # Track which matchups we've scheduled
+        """Generate the season schedule organized by weeks"""
+        # Schedule is now a list of weeks, where each week is a list of games
+        self.schedule = [[] for _ in range(self.total_weeks)]
+        scheduled_matchups = set()
+        all_games = []
 
-        # Generate conference games - each pair plays once (home court assigned)
+        # Generate conference games - each pair plays once
         for conference in CONFERENCES.keys():
             conf_teams = [t for t in self.all_teams if t.conference == conference]
 
             # Round robin - each team plays each other once
             for i, team1 in enumerate(conf_teams):
                 for team2 in conf_teams[i+1:]:
-                    # Create a unique matchup identifier
                     matchup = tuple(sorted([team1.name, team2.name]))
 
                     if matchup not in scheduled_matchups:
                         # Randomly assign home team
                         if random.random() < 0.5:
-                            self.schedule.append((team1, team2, True))
+                            all_games.append((team1, team2, True))
                         else:
-                            self.schedule.append((team2, team1, True))
+                            all_games.append((team2, team1, True))
                         scheduled_matchups.add(matchup)
 
-        # Generate non-conference games
+        # Generate non-conference games (fewer for balance)
         for team in self.all_teams:
             other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
-            # Each team plays 10 non-conference games
-            num_non_conf = min(10, len(other_conf_teams))
+            # Each team plays 5-8 non-conference games
+            num_non_conf = min(random.randint(5, 8), len(other_conf_teams))
             opponents = random.sample(other_conf_teams, num_non_conf)
 
             for opponent in opponents:
                 matchup = tuple(sorted([team.name, opponent.name]))
 
                 if matchup not in scheduled_matchups:
-                    # Randomly assign home team
                     if random.random() < 0.5:
-                        self.schedule.append((team, opponent, False))
+                        all_games.append((team, opponent, False))
                     else:
-                        self.schedule.append((opponent, team, False))
+                        all_games.append((opponent, team, False))
                     scheduled_matchups.add(matchup)
 
-        # Shuffle schedule for variety
-        random.shuffle(self.schedule)
+        # Distribute games across weeks, ensuring no team plays multiple times per week
+        random.shuffle(all_games)
+
+        for game in all_games:
+            home_team, away_team, is_conf = game
+
+            # Find the earliest week where both teams can play
+            for week_idx in range(self.total_weeks):
+                week_teams = set()
+                for g in self.schedule[week_idx]:
+                    week_teams.add(g[0].name)
+                    week_teams.add(g[1].name)
+
+                # Check if both teams are available this week
+                if home_team.name not in week_teams and away_team.name not in week_teams:
+                    self.schedule[week_idx].append(game)
+                    break
 
     def simulate_week(self) -> List[dict]:
         """Simulate one week of games"""
         if self.current_week >= self.total_weeks:
             return []
 
-        # Calculate games per week
-        games_per_week = len(self.schedule) // self.total_weeks
-        start_idx = self.current_week * games_per_week
-        end_idx = start_idx + games_per_week
-
-        week_games = self.schedule[start_idx:end_idx]
+        # Get this week's games
+        week_games = self.schedule[self.current_week]
         results = []
 
         for home_team, away_team, is_conference in week_games:
@@ -111,6 +122,47 @@ class Season:
         return sorted(self.all_teams,
                      key=lambda t: (t.wins, -t.losses),
                      reverse=True)
+
+    def get_team_schedule(self, team: Team) -> List[dict]:
+        """Get full season schedule for a specific team"""
+        team_schedule = []
+
+        for week_idx, week_games in enumerate(self.schedule):
+            for home_team, away_team, is_conference in week_games:
+                if home_team.name == team.name or away_team.name == team.name:
+                    is_home = home_team.name == team.name
+                    opponent = away_team if is_home else home_team
+
+                    # Check if game has been played (week is in the past)
+                    played = week_idx < self.current_week
+
+                    game_info = {
+                        'week': week_idx + 1,
+                        'opponent': opponent.name,
+                        'is_home': is_home,
+                        'is_conference': is_conference,
+                        'played': played
+                    }
+
+                    # If played, get the result
+                    if played:
+                        for result in team.results:
+                            home_match = result['home_team'] == team.name or result['home_team'] == opponent.name
+                            away_match = result['away_team'] == team.name or result['away_team'] == opponent.name
+
+                            if home_match and away_match:
+                                if is_home:
+                                    game_info['team_score'] = result['home_score']
+                                    game_info['opp_score'] = result['away_score']
+                                else:
+                                    game_info['team_score'] = result['away_score']
+                                    game_info['opp_score'] = result['home_score']
+                                game_info['won'] = game_info['team_score'] > game_info['opp_score']
+                                break
+
+                    team_schedule.append(game_info)
+
+        return team_schedule
 
     def display_scoreboard(self, results: List[dict]):
         """Display game results"""
