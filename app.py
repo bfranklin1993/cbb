@@ -155,33 +155,76 @@ def main():
 
 def select_team_page():
     """Team selection"""
+    st.markdown('<div class="main-title">🏀 CBB MANAGER</div>', unsafe_allow_html=True)
     st.markdown("## SELECT YOUR TEAM")
+    st.caption("Choose a school to begin your coaching career")
 
-    conferences = ["All"] + sorted(CONFERENCES.keys())
-    selected_conf = st.selectbox("Conference:", conferences)
+    col1, col2 = st.columns(2)
+    with col1:
+        conferences = ["All"] + sorted(CONFERENCES.keys())
+        selected_conf = st.selectbox("Conference:", conferences)
+    with col2:
+        sort_by = st.selectbox("Sort by:", ["Prestige", "Alphabetical", "Rating"])
+
+    # Search box
+    search_term = st.text_input("🔍 Search teams:", "").strip().lower()
 
     if selected_conf == "All":
         teams = st.session_state.all_teams
     else:
         teams = [t for t in st.session_state.all_teams if t.conference == selected_conf]
 
-    team_data = [{
-        "Team": t.name,
-        "Conference": t.conference,
-        "Rating": f"{t.get_team_rating():.1f}"
-    } for t in teams]
+    # Apply search filter
+    if search_term:
+        teams = [t for t in teams if search_term in t.name.lower()]
+
+    # Sort teams
+    if sort_by == "Prestige":
+        prestige_order = {"ELITE": 0, "HIGH": 1, "UPPER_MID": 2, "MID": 3, "LOW_MID": 4, "LOW": 5}
+        teams.sort(key=lambda t: (prestige_order.get(t.prestige, 6), -t.get_team_rating()))
+    elif sort_by == "Alphabetical":
+        teams.sort(key=lambda t: t.name)
+    else:  # Rating
+        teams.sort(key=lambda t: t.get_team_rating(), reverse=True)
+
+    # Get preseason rankings
+    all_teams_ranked = sorted(st.session_state.all_teams, key=lambda t: t.get_team_rating(), reverse=True)
+
+    team_data = []
+    for t in teams:
+        rank = next((i+1 for i, rt in enumerate(all_teams_ranked) if rt.name == t.name), None)
+        rank_str = f"#{rank}" if rank and rank <= 25 else "-"
+
+        team_data.append({
+            "Rank": rank_str,
+            "Team": t.name,
+            "Conference": t.conference,
+            "Prestige": t.prestige,
+            "Rating": f"{t.get_team_rating():.1f}"
+        })
 
     df = pd.DataFrame(team_data)
-    st.dataframe(df, use_container_width=True, height=400, hide_index=True)
+    st.dataframe(df, use_container_width=True, height=450, hide_index=True)
+    st.caption(f"Showing {len(teams)} teams")
 
     team_names = [t.name for t in teams]
     selected = st.selectbox("Choose your team:", [""] + team_names)
 
-    if selected and st.button("START CAREER", type="primary"):
+    if selected:
         team = get_team_by_name(st.session_state.all_teams, selected)
         if team:
-            st.session_state.player_team = team
-            st.rerun()
+            # Show team preview
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Prestige", team.prestige)
+            with col2:
+                st.metric("Rating", f"{team.get_team_rating():.1f}")
+            with col3:
+                st.metric("Conference", team.conference)
+
+            if st.button("🏀 START CAREER", type="primary", use_container_width=True):
+                st.session_state.player_team = team
+                st.rerun()
 
 
 def dashboard_page():
@@ -189,11 +232,27 @@ def dashboard_page():
     team = st.session_state.player_team
     season = st.session_state.current_season
 
+    # Get team ranking
+    # Use preseason rankings (team rating) if no games played, otherwise use record
+    if team.games_played == 0:
+        # Preseason rankings based on team rating and prestige
+        all_teams_sorted = sorted(st.session_state.all_teams, key=lambda t: t.get_team_rating(), reverse=True)
+    else:
+        # In-season rankings based on record
+        all_teams_sorted = sorted(st.session_state.all_teams, key=lambda t: (t.wins, -t.losses), reverse=True)
+
+    team_rank = next((i+1 for i, t in enumerate(all_teams_sorted) if t.name == team.name), None)
+    rank_display = f"#{team_rank} " if team_rank and team_rank <= 25 else ""
+
     # Header
     col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
-        st.markdown(f"## {team.name}")
-        st.caption(f"{team.conference} • {st.session_state.current_year} Season")
+        st.markdown(f"## {rank_display}{team.name}")
+        if season:
+            current_date = season.week_to_date(season.current_week)
+            st.caption(f"{team.conference} • {current_date}, 2025 • Week {season.current_week + 1}/{season.total_weeks}")
+        else:
+            st.caption(f"{team.conference} • {st.session_state.current_year} Season")
     with col2:
         if st.button("⚙️ Change Team"):
             st.session_state.player_team = None
@@ -496,7 +555,13 @@ def league_page():
     view = st.radio("", ["Top 25", "Conference"], horizontal=True)
 
     if view == "Top 25":
-        teams = sorted(st.session_state.all_teams, key=lambda t: (t.wins, -t.losses), reverse=True)[:25]
+        # Use preseason rankings if no games played
+        player_team = st.session_state.player_team
+        if player_team.games_played == 0:
+            teams = sorted(st.session_state.all_teams, key=lambda t: t.get_team_rating(), reverse=True)[:25]
+            st.caption("Preseason Top 25 (based on team ratings)")
+        else:
+            teams = sorted(st.session_state.all_teams, key=lambda t: (t.wins, -t.losses), reverse=True)[:25]
 
         standings_data = []
         for i, t in enumerate(teams, 1):
