@@ -21,11 +21,12 @@ class Season:
         self.total_weeks = 18  # 18 weeks of regular season (Nov-Feb)
 
     def generate_schedule(self):
-        """Generate realistic 30-33 game schedule per team"""
+        """Generate realistic schedule: Non-conf in Nov-Dec, Conference in Jan-Mar"""
         # Schedule is now a list of weeks, where each week is a list of games
         self.schedule = [[] for _ in range(self.total_weeks)]
         scheduled_matchups = set()
-        all_games = []
+        conference_games = []
+        non_conference_games = []
 
         # Generate conference games - realistic counts based on conference size
         for conference in CONFERENCES.keys():
@@ -51,9 +52,9 @@ class Season:
                     if matchup not in scheduled_matchups:
                         # Home game for one team
                         if random.random() < 0.5:
-                            all_games.append((team1, team2, True))
+                            conference_games.append((team1, team2, True))
                         else:
-                            all_games.append((team2, team1, True))
+                            conference_games.append((team2, team1, True))
                         scheduled_matchups.add(matchup)
 
             # Add return games to reach target conference games
@@ -71,15 +72,13 @@ class Season:
 
                         for team2 in opponents:
                             # Add return game (opposite venue from first game)
-                            all_games.append((team2, team1, True))
+                            conference_games.append((team2, team1, True))
 
         # Generate non-conference games - 5-7 games per team
-        # (Since each matchup creates games for 2 teams, we request fewer)
         for team in self.all_teams:
             other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
             # Each team plays 5-7 non-conference games
-            # This results in ~10-14 total non-conf games per team when counting both sides
             num_non_conf = min(random.randint(5, 7), len(other_conf_teams))
             opponents = random.sample(other_conf_teams, num_non_conf)
 
@@ -88,19 +87,35 @@ class Season:
 
                 if matchup not in scheduled_matchups:
                     if random.random() < 0.5:
-                        all_games.append((team, opponent, False))
+                        non_conference_games.append((team, opponent, False))
                     else:
-                        all_games.append((opponent, team, False))
+                        non_conference_games.append((opponent, team, False))
                     scheduled_matchups.add(matchup)
 
-        # Distribute games across weeks - teams can play 2 games per week (realistic)
-        random.shuffle(all_games)
+        # Distribute games: Non-conf in weeks 1-8 (Nov-Dec), Conference in weeks 9-18 (Jan-Mar)
+        random.shuffle(non_conference_games)
+        random.shuffle(conference_games)
 
-        for game in all_games:
+        # Schedule non-conference games in weeks 1-8
+        for game in non_conference_games:
             home_team, away_team, is_conf = game
 
-            # Find the earliest week where both teams haven't played too much
-            for week_idx in range(self.total_weeks):
+            for week_idx in range(0, 8):  # Weeks 1-8 (Nov-Dec)
+                week_teams = {}
+                for g in self.schedule[week_idx]:
+                    week_teams[g[0].name] = week_teams.get(g[0].name, 0) + 1
+                    week_teams[g[1].name] = week_teams.get(g[1].name, 0) + 1
+
+                # Each team can play up to 2 games per week
+                if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
+                    self.schedule[week_idx].append(game)
+                    break
+
+        # Schedule conference games in weeks 9-18
+        for game in conference_games:
+            home_team, away_team, is_conf = game
+
+            for week_idx in range(8, 18):  # Weeks 9-18 (Jan-Mar)
                 week_teams = {}
                 for g in self.schedule[week_idx]:
                     week_teams[g[0].name] = week_teams.get(g[0].name, 0) + 1

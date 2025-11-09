@@ -53,7 +53,7 @@ def init_session_state():
         st.session_state.all_teams = create_all_teams()
         st.session_state.player_team = None
         st.session_state.current_season = None
-        st.session_state.current_year = 2024
+        st.session_state.current_year = 2025
         st.session_state.game_engine = GameEngine()
         st.session_state.game_initialized = True
         st.session_state.page = "main"
@@ -383,7 +383,11 @@ def recruiting_tab_in_season():
     st.markdown("### Recruiting")
 
     team = st.session_state.player_team
-    open_spots = 12 - len(team.roster)
+
+    # Count graduating seniors (players with year >= 4)
+    graduating_seniors = sum(1 for p in team.roster if p.year >= 4)
+    future_spots = graduating_seniors
+    current_commits = len([p for p in team.roster if p.year == 0]) if hasattr(team.roster[0], 'year') else 0
 
     # Initialize recruiting class if not exists
     if st.session_state.recruiting_class is None:
@@ -394,7 +398,11 @@ def recruiting_tab_in_season():
 
     rc = st.session_state.recruiting_class
 
-    st.info(f"Recruiting for {st.session_state.current_year + 1} season • {open_spots} scholarships available")
+    # Count current commits to this recruiting class
+    commits = [r for r in rc.recruits if r.committed and r.committed_to == team.name]
+    available_spots = future_spots - len(commits)
+
+    st.info(f"Recruiting Class of {st.session_state.current_year + 1} • {graduating_seniors} seniors graduating • {len(commits)} commits • {available_spots} spots remaining")
 
     # Position filter
     position = st.selectbox("Filter by Position:", ["All", "PG", "SG", "SF", "PF", "C"], key="recruit_pos_season")
@@ -406,7 +414,7 @@ def recruiting_tab_in_season():
         st.warning("No recruits available.")
         return
 
-    # Create recruit dataframe
+    # Create recruit dataframe - NO POTENTIAL SHOWN
     recruit_data = []
     for r in recruits:
         recruit_data.append({
@@ -414,12 +422,17 @@ def recruiting_tab_in_season():
             "Name": r.name,
             "Pos": r.position,
             "Stars": "⭐" * r.stars,
-            "Interest": f"{r.interest}%",
-            "Potential": f"{r.potential:.1f}"
+            "Interest": f"{r.interest}%"
         })
 
     df = pd.DataFrame(recruit_data)
     st.dataframe(df, use_container_width=True, hide_index=True, height=300)
+
+    # Show commits
+    if commits:
+        with st.expander(f"Your Commits ({len(commits)})"):
+            for commit in commits:
+                st.text(f"{'⭐' * commit.stars} {commit.name} ({commit.position}) - #{commit.ranking}")
 
     # Recruit a player
     recruit_names = [f"{r.name} ({r.position})" for r in recruits[:20]]
@@ -441,13 +454,11 @@ def recruiting_tab_in_season():
             st.progress(recruit.interest / 100)
 
         if st.button(f"Recruit {recruit.name}", type="primary", key="recruit_btn_season"):
-            if open_spots <= 0:
+            if available_spots <= 0:
                 st.error("No scholarship spots available!")
             else:
                 success = rc.recruit_player(recruit, team)
                 if success:
-                    player = recruit.to_player()
-                    team.roster.append(player)
                     st.success(f"✅ {recruit.name} committed!")
                 else:
                     st.error(f"❌ {recruit.name} declined. Interest decreased.")
@@ -595,7 +606,7 @@ def recruiting_page():
         st.info("No recruits available.")
         return
 
-    # Create recruit dataframe
+    # Create recruit dataframe - NO POTENTIAL SHOWN
     recruit_data = []
     for r in recruits:
         recruit_data.append({
@@ -603,8 +614,7 @@ def recruiting_page():
             "Name": r.name,
             "Pos": r.position,
             "Stars": "⭐" * r.stars,
-            "Interest": f"{r.interest}%",
-            "Potential": f"{r.potential:.1f}"
+            "Interest": f"{r.interest}%"
         })
 
     df = pd.DataFrame(recruit_data)
