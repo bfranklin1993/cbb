@@ -185,6 +185,156 @@ class Game:
 
         input("\nPress Enter to continue...")
 
+    def manage_rotation(self):
+        """Manage player rotation (starters, backups, bench)"""
+        while True:
+            print("\n" + "="*60)
+            print("ROTATION MANAGEMENT")
+            print("="*60)
+
+            print(f"\nCurrent Rotation Style: {self.player_team.rotation_style}")
+            dist = self.player_team.get_rotation_distribution()
+            print(f"Stats Distribution - Starters: {int(dist[0]*100)}%, Backups: {int(dist[1]*100)}%, Bench: {int(dist[2]*100)}%")
+
+            # Display current rotation
+            print("\n" + "-"*60)
+            print("STARTERS (5 players)")
+            print("-"*60)
+            for idx in self.player_team.rotation_starters:
+                if idx < len(self.player_team.roster):
+                    player = self.player_team.roster[idx]
+                    print(f"  {idx+1}. {player.name:<20} ({player.position}) - {player.overall_rating():.1f} OVR")
+
+            print("\n" + "-"*60)
+            print("BACKUP ROTATION (5 players)")
+            print("-"*60)
+            for idx in self.player_team.rotation_backups:
+                if idx < len(self.player_team.roster):
+                    player = self.player_team.roster[idx]
+                    print(f"  {idx+1}. {player.name:<20} ({player.position}) - {player.overall_rating():.1f} OVR")
+
+            print("\n" + "-"*60)
+            print("DEEP BENCH (2 players)")
+            print("-"*60)
+            for idx in self.player_team.rotation_bench:
+                if idx < len(self.player_team.roster):
+                    player = self.player_team.roster[idx]
+                    print(f"  {idx+1}. {player.name:<20} ({player.position}) - {player.overall_rating():.1f} OVR")
+
+            print("\n1. Change Rotation Style")
+            print("2. Move Player Between Groups")
+            print("3. Auto-Set Rotation (by rating)")
+            print("4. Back to Season Menu")
+
+            choice = input("\nSelect option: ")
+
+            if choice == "1":
+                self._change_rotation_style()
+            elif choice == "2":
+                self._move_player_rotation()
+            elif choice == "3":
+                self.player_team._set_default_rotation()
+                print("\nRotation automatically set by player ratings!")
+                input("Press Enter to continue...")
+            elif choice == "4":
+                break
+
+    def _change_rotation_style(self):
+        """Change rotation philosophy"""
+        print("\n" + "="*60)
+        print("ROTATION STYLE")
+        print("="*60)
+        print("\n1. SHORT ROTATION - Ride your stars")
+        print("   Starters: 70%, Backups: 25%, Bench: 5%")
+        print("   Best performance, starters get most stats")
+        print("\n2. BALANCED ROTATION - Standard approach")
+        print("   Starters: 60%, Backups: 33%, Bench: 7%")
+        print("   Normal distribution, keeps everyone involved")
+        print("\n3. DEEP ROTATION - Share the minutes")
+        print("   Starters: 50%, Backups: 40%, Bench: 10%")
+        print("   Develop depth, backups get significant playing time")
+
+        choice = input("\nSelect rotation style (1-3): ")
+
+        if choice == "1":
+            self.player_team.rotation_style = "SHORT"
+            print("\nRotation set to: SHORT ROTATION")
+        elif choice == "2":
+            self.player_team.rotation_style = "BALANCED"
+            print("\nRotation set to: BALANCED ROTATION")
+        elif choice == "3":
+            self.player_team.rotation_style = "DEEP"
+            print("\nRotation set to: DEEP ROTATION")
+
+        input("\nPress Enter to continue...")
+
+    def _move_player_rotation(self):
+        """Move a player between rotation groups"""
+        print("\nEnter player number (1-12) to move:")
+        try:
+            player_num = int(input("Player #: "))
+            if player_num < 1 or player_num > 12:
+                print("Invalid player number!")
+                input("Press Enter to continue...")
+                return
+
+            player_idx = player_num - 1
+            player = self.player_team.roster[player_idx]
+
+            print(f"\nMoving: {player.name} ({player.position}) - {player.overall_rating():.1f} OVR")
+            print("\n1. Starters")
+            print("2. Backup Rotation")
+            print("3. Deep Bench")
+
+            group_choice = input("\nMove to group: ")
+
+            if group_choice == "1":
+                if len(self.player_team.rotation_starters) >= 5:
+                    print("\nStarters group is full! Remove someone first.")
+                else:
+                    # Remove from other groups
+                    if player_idx in self.player_team.rotation_backups:
+                        self.player_team.rotation_backups.remove(player_idx)
+                    if player_idx in self.player_team.rotation_bench:
+                        self.player_team.rotation_bench.remove(player_idx)
+                    # Add to starters
+                    if player_idx not in self.player_team.rotation_starters:
+                        self.player_team.rotation_starters.append(player_idx)
+                    print(f"\n{player.name} moved to Starters!")
+
+            elif group_choice == "2":
+                if len(self.player_team.rotation_backups) >= 5:
+                    print("\nBackup group is full! Remove someone first.")
+                else:
+                    # Remove from other groups
+                    if player_idx in self.player_team.rotation_starters:
+                        self.player_team.rotation_starters.remove(player_idx)
+                    if player_idx in self.player_team.rotation_bench:
+                        self.player_team.rotation_bench.remove(player_idx)
+                    # Add to backups
+                    if player_idx not in self.player_team.rotation_backups:
+                        self.player_team.rotation_backups.append(player_idx)
+                    print(f"\n{player.name} moved to Backup Rotation!")
+
+            elif group_choice == "3":
+                if len(self.player_team.rotation_bench) >= 2:
+                    print("\nBench group is full! Remove someone first.")
+                else:
+                    # Remove from other groups
+                    if player_idx in self.player_team.rotation_starters:
+                        self.player_team.rotation_starters.remove(player_idx)
+                    if player_idx in self.player_team.rotation_backups:
+                        self.player_team.rotation_backups.remove(player_idx)
+                    # Add to bench
+                    if player_idx not in self.player_team.rotation_bench:
+                        self.player_team.rotation_bench.append(player_idx)
+                    print(f"\n{player.name} moved to Deep Bench!")
+
+        except ValueError:
+            print("Invalid input!")
+
+        input("\nPress Enter to continue...")
+
     def start_season(self):
         """Start a new season"""
         self.current_season = Season(self.all_teams, self.current_year)
@@ -212,10 +362,11 @@ class Game:
             print("2. View Roster")
             print("3. View Player Stats")
             print("4. View Team Schedule/Results")
-            print("5. Adjust Game Plan")
-            print("6. View Standings")
-            print("7. View Conference Standings")
-            print("8. Simulate Rest of Season")
+            print("5. Manage Rotation")
+            print("6. Adjust Game Plan")
+            print("7. View Standings")
+            print("8. View Conference Standings")
+            print("9. Simulate Rest of Season")
 
             choice = input("\nSelect option: ")
 
@@ -234,13 +385,16 @@ class Game:
                 self.view_team_schedule()
 
             elif choice == "5":
-                self.set_game_plan()
+                self.manage_rotation()
 
             elif choice == "6":
+                self.set_game_plan()
+
+            elif choice == "7":
                 self.current_season.display_standings(50)
                 input("\nPress Enter to continue...")
 
-            elif choice == "7":
+            elif choice == "8":
                 standings = self.current_season.get_conference_standings(self.player_team.conference)
                 print("\n" + "="*60)
                 print(f"{self.player_team.conference} STANDINGS")
@@ -253,7 +407,7 @@ class Game:
                     print(f"{team.name:<25}{overall:<12}{conf:<12}")
                 input("\nPress Enter to continue...")
 
-            elif choice == "8":
+            elif choice == "9":
                 print("\nSimulating rest of season...")
                 self.current_season.simulate_full_season()
                 print("Regular season complete!")
@@ -332,7 +486,16 @@ class Game:
             return
 
         # Create recruiting class
-        recruiting_class = RecruitingClass(self.current_year)
+        num_teams = len(self.all_teams)
+        recruiting_class = RecruitingClass(self.current_year, num_teams)
+
+        print(f"\nRecruiting Class of {self.current_year}: {recruiting_class.class_quality} CLASS")
+        if recruiting_class.class_quality == "ELITE":
+            print("This is a loaded recruiting class with exceptional talent!")
+        elif recruiting_class.class_quality == "WEAK":
+            print("This is a weaker recruiting class overall.")
+        else:
+            print("This is an average recruiting class.")
 
         recruited_count = 0
 
@@ -408,21 +571,20 @@ class Game:
         title = f"AVAILABLE RECRUITS" + (f" - {position}" if position else "")
         print(title)
         print("="*60)
-        print(f"\n{'#':<4}{'Name':<20}{'Pos':<5}{'Pot':<5}{'Int':<5}{'OVR':<6}{'SHT':<5}{'DEF':<5}{'ATH':<5}")
+        print(f"\n{'#':<4}{'Rank':<6}{'Name':<20}{'Pos':<5}{'Stars':<8}{'Int':<5}{'OVR':<6}")
         print("-" * 60)
 
-        for i, recruit in enumerate(recruits[:30], 1):  # Show top 30
-            print(f"{i:<4}{recruit.name:<20}{recruit.position:<5}"
-                  f"{recruit.potential:<5}{recruit.interest:<5}"
-                  f"{recruit.overall_rating():<6.1f}"
-                  f"{recruit.shooting:<5.1f}{recruit.defense:<5.1f}{recruit.athleticism:<5.1f}")
+        for i, recruit in enumerate(recruits[:50], 1):  # Show top 50
+            stars = recruit.get_star_display()
+            print(f"{i:<4}#{recruit.ranking:<5}{recruit.name:<20}{recruit.position:<5}"
+                  f"{stars:<8}{recruit.interest:<5}{recruit.overall_rating():<6.1f}")
 
         # Option to recruit
         choice = input("\nEnter recruit # to attempt recruitment (0 to go back): ")
 
         try:
             choice_num = int(choice)
-            if choice_num > 0 and choice_num <= len(recruits[:30]):
+            if choice_num > 0 and choice_num <= len(recruits[:50]):
                 recruit = recruits[choice_num - 1]
                 self.attempt_recruit(recruit, recruiting_class)
         except ValueError:
@@ -431,7 +593,10 @@ class Game:
     def attempt_recruit(self, recruit, recruiting_class: RecruitingClass):
         """Attempt to recruit a player"""
         print(f"\n Attempting to recruit {recruit.name}...")
-        print(f"Position: {recruit.position}, Potential: {recruit.potential}/10")
+        print(f"National Ranking: #{recruit.ranking}")
+        print(f"Rating: {recruit.get_star_display()} ({recruit.stars}-star)")
+        print(f"Position: {recruit.position}")
+        print(f"Overall: {recruit.overall_rating():.1f}")
         print(f"Interest Level: {recruit.interest}%")
 
         confirm = input("\nCommit a scholarship? (y/n): ")

@@ -91,39 +91,88 @@ class Team:
         self.schedule = []  # List of upcoming games
         self.results = []   # List of completed games with box scores
 
+        # Rotation management
+        self.rotation_starters = []  # List of 5 player indices
+        self.rotation_backups = []   # List of 5 player indices
+        self.rotation_bench = []     # List of 2 player indices
+        self.rotation_style = "BALANCED"  # SHORT, BALANCED, or DEEP
+
         # Generate initial roster
         self._generate_roster()
+        self._set_default_rotation()
 
     def _generate_roster(self):
-        """Generate a random roster of 12 players"""
+        """Generate a balanced roster of 12 players (3 per class)"""
         first_names = ["James", "Michael", "John", "David", "Chris", "Matt", "Ryan",
                       "Kevin", "Tyler", "Brandon", "Jason", "Josh", "Andrew", "Nick"]
         last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia",
                      "Miller", "Davis", "Martinez", "Wilson", "Anderson", "Taylor"]
 
+        # Positions: need variety across all positions
         positions_needed = ["PG", "PG", "SG", "SG", "SF", "SF", "PF", "PF", "C", "C", "SG", "SF"]
 
-        for i, pos in enumerate(positions_needed):
+        # Years: 3 per class (Fr, So, Jr, Sr)
+        years_needed = [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]
+
+        # Shuffle to mix positions with years
+        import random as rand
+        rand.shuffle(positions_needed)
+        rand.shuffle(years_needed)
+
+        for i in range(12):
             name = f"{random.choice(first_names)} {random.choice(last_names)}"
-            year = random.randint(1, 4)
+            pos = positions_needed[i]
+            year = years_needed[i]
             player = Player(name, pos, year)
 
-            # Make some players better (starters)
-            if i < 5:  # Starting 5
-                player.shooting += random.randint(0, 2)
-                player.defense += random.randint(0, 2)
-                player.athleticism += random.randint(0, 2)
-                player.basketball_iq += random.randint(0, 2)
-                player.rebounding += random.randint(0, 2)
+            # Older players are generally better
+            year_bonus = (year - 1) * 0.5  # +0.5 per year
 
-                # Cap at 10
-                player.shooting = min(10, player.shooting)
-                player.defense = min(10, player.defense)
-                player.athleticism = min(10, player.athleticism)
-                player.basketball_iq = min(10, player.basketball_iq)
-                player.rebounding = min(10, player.rebounding)
+            # Some randomness in quality
+            if random.random() < 0.3:  # 30% chance to be notably better
+                player.shooting += random.uniform(1, 2) + year_bonus
+                player.defense += random.uniform(1, 2) + year_bonus
+                player.athleticism += random.uniform(1, 2) + year_bonus
+                player.basketball_iq += random.uniform(1, 2) + year_bonus
+                player.rebounding += random.uniform(1, 2) + year_bonus
+            else:
+                player.shooting += year_bonus
+                player.defense += year_bonus
+                player.athleticism += year_bonus
+                player.basketball_iq += year_bonus
+                player.rebounding += year_bonus
+
+            # Cap at 10
+            player.shooting = min(10, player.shooting)
+            player.defense = min(10, player.defense)
+            player.athleticism = min(10, player.athleticism)
+            player.basketball_iq = min(10, player.basketball_iq)
+            player.rebounding = min(10, player.rebounding)
 
             self.roster.append(player)
+
+    def _set_default_rotation(self):
+        """Set default rotation based on player ratings"""
+        if len(self.roster) < 12:
+            return
+
+        # Sort players by rating
+        sorted_indices = sorted(range(len(self.roster)),
+                              key=lambda i: self.roster[i].overall_rating(),
+                              reverse=True)
+
+        self.rotation_starters = sorted_indices[:5]
+        self.rotation_backups = sorted_indices[5:10]
+        self.rotation_bench = sorted_indices[10:12]
+
+    def get_rotation_distribution(self) -> tuple:
+        """Get stat distribution percentages based on rotation style"""
+        if self.rotation_style == "SHORT":
+            return (0.70, 0.25, 0.05)  # Starters, Backups, Bench
+        elif self.rotation_style == "DEEP":
+            return (0.50, 0.40, 0.10)
+        else:  # BALANCED
+            return (0.60, 0.33, 0.07)
 
     def get_team_rating(self) -> float:
         """Get overall team rating based on top 8 players"""
