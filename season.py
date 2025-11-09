@@ -210,6 +210,60 @@ class Season:
 
         return team_schedule
 
+    def get_next_game_for_team(self, team: Team) -> dict:
+        """Get the next unplayed game for a specific team"""
+        for week_idx in range(self.current_week, self.total_weeks):
+            for home_team, away_team, is_conference in self.schedule[week_idx]:
+                if home_team.name == team.name or away_team.name == team.name:
+                    is_home = home_team.name == team.name
+                    opponent = away_team if is_home else home_team
+
+                    return {
+                        'week': week_idx,
+                        'home_team': home_team,
+                        'away_team': away_team,
+                        'opponent': opponent,
+                        'is_home': is_home,
+                        'is_conference': is_conference,
+                        'date': self.week_to_date(week_idx)
+                    }
+        return None
+
+    def simulate_to_next_game(self, team: Team) -> dict:
+        """Simulate games until the specified team's next game, then simulate that game and return result"""
+        next_game = self.get_next_game_for_team(team)
+        if not next_game:
+            return None
+
+        target_week = next_game['week']
+        results = []
+
+        # Simulate weeks up to and including the target week
+        while self.current_week <= target_week:
+            week_results = self.simulate_week()
+            results.extend(week_results)
+
+        # Find and return the result for the team's game
+        for result in results:
+            if result['home_team'] == team.name or result['away_team'] == team.name:
+                return result
+
+        return None
+
+    def week_to_date(self, week: int) -> str:
+        """Convert week number to a calendar date string"""
+        from datetime import datetime, timedelta
+
+        # Season starts first Monday of November
+        # 2025 season starts Nov 3, 2025
+        season_start = datetime(self.year, 11, 3)  # First Monday in November
+
+        # Each week is 7 days, but games can be on different days
+        # For simplicity, we'll show the Monday of each week
+        week_start = season_start + timedelta(weeks=week)
+
+        return week_start.strftime("%b %d")
+
     def display_scoreboard(self, results: List[dict]):
         """Display game results"""
         print("\n" + "="*60)

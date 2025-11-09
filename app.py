@@ -230,12 +230,20 @@ def dashboard_page():
             if st.button("🏆 POSTSEASON", type="primary", use_container_width=True):
                 run_postseason_tournaments()
         else:
+            # Show next game info
+            next_game = season.get_next_game_for_team(team)
+            if next_game:
+                location = "vs" if next_game['is_home'] else "@"
+                conf_tag = " (CONFERENCE)" if next_game['is_conference'] else ""
+                st.info(f"**NEXT GAME:** {next_game['date']} • {location} {next_game['opponent'].name}{conf_tag}")
+
             # Simulation controls
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("⏭️ SIMULATE 1 WEEK", type="primary", use_container_width=True):
-                    results = season.simulate_week()
-                    st.session_state.last_results = results
+                if st.button("⏭️ SIM TO NEXT GAME", type="primary", use_container_width=True):
+                    result = season.simulate_to_next_game(team)
+                    if result:
+                        st.session_state.last_results = [result]
                     st.rerun()
             with col2:
                 if st.button("⏩ SIM TO END", use_container_width=True):
@@ -270,8 +278,9 @@ def dashboard_page():
                 st.markdown("### UPCOMING GAMES")
                 for game in upcoming:
                     location = "vs" if game['is_home'] else "@"
-                    game_type = "CONF" if game['is_conference'] else ""
-                    st.text(f"Week {game['week']}: {location} {game['opponent']} {game_type}")
+                    game_type = " (CONF)" if game['is_conference'] else ""
+                    game_date = season.week_to_date(game['week'] - 1)
+                    st.text(f"{game_date}: {location} {game['opponent']}{game_type}")
 
 
 def team_page():
@@ -307,7 +316,7 @@ def team_page():
     st.markdown("---")
 
     # Tabs for roster management
-    tab1, tab2, tab3 = st.tabs(["ROSTER", "STATS", "ROTATION"])
+    tab1, tab2, tab3, tab4 = st.tabs(["ROSTER", "STATS", "ROTATION", "SCHEDULE"])
 
     with tab1:
         show_roster(team)
@@ -317,6 +326,9 @@ def team_page():
 
     with tab3:
         manage_rotation(team)
+
+    with tab4:
+        show_schedule(team)
 
 
 def show_roster(team):
@@ -366,13 +378,25 @@ def show_stats(team):
         df = pd.DataFrame(stats_data)
         st.dataframe(df, use_container_width=True, hide_index=True, height=500)
 
-        # Team averages
+        # Team averages - calculate from game results
         st.markdown("### TEAM AVERAGES")
         col1, col2, col3 = st.columns(3)
 
-        total_ppg = sum(p.points for p in team.roster) / team.games_played
-        total_rpg = sum(p.rebounds for p in team.roster) / team.games_played
-        total_apg = sum(p.assists for p in team.roster) / team.games_played
+        if team.games_played > 0 and team.results:
+            # Calculate team PPG from actual game scores
+            total_points = 0
+            for result in team.results:
+                if result['home_team'] == team.name:
+                    total_points += result['home_score']
+                else:
+                    total_points += result['away_score']
+
+            total_ppg = total_points / team.games_played
+            # For rebounds/assists, sum player stats and divide by games
+            total_rpg = sum(p.rebounds for p in team.roster) / team.games_played
+            total_apg = sum(p.assists for p in team.roster) / team.games_played
+        else:
+            total_ppg = total_rpg = total_apg = 0
 
         col1.metric("PPG", f"{total_ppg:.1f}")
         col2.metric("RPG", f"{total_rpg:.1f}")
@@ -399,6 +423,63 @@ def manage_rotation(team):
     if st.button("AUTO-SET BY RATING"):
         team._set_default_rotation()
         st.success("Rotation updated!")
+
+
+def show_schedule(team):
+    """Display full season schedule with results"""
+    st.markdown("### SEASON SCHEDULE")
+
+    season = st.session_state.current_season
+    schedule = season.get_team_schedule(team)
+
+    if not schedule:
+        st.info("Schedule will be generated at season start")
+        return
+
+    # Separate into completed and upcoming games
+    completed = [g for g in schedule if g.get('played', False)]
+    upcoming = [g for g in schedule if not g.get('played', False)]
+
+    # Show record
+    wins = len([g for g in completed if g.get('won', False)])
+    losses = len([g for g in completed if not g.get('won', False)])
+    st.metric("Record", f"{wins}-{losses}")
+
+    # Display completed games
+    if completed:
+        st.markdown("#### COMPLETED GAMES")
+        for game in completed:
+            won = game.get('won', False)
+            box_class = "win-box" if won else "loss-box"
+            result_text = "W" if won else "L"
+            location = "vs" if game['is_home'] else "@"
+            conf_tag = " (CONF)" if game['is_conference'] else ""
+            game_date = season.week_to_date(game['week'] - 1)  # week is 1-indexed
+
+            score_display = f"{game.get('team_score', 0)}-{game.get('opp_score', 0)}"
+
+            st.markdown(
+                f'<div class="{box_class}">'
+                f'<strong>{game_date}</strong> • {result_text} {score_display} • '
+                f'{location} {game["opponent"]}{conf_tag}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
+
+    # Display upcoming games
+    if upcoming:
+        st.markdown("#### UPCOMING GAMES")
+        for game in upcoming[:10]:  # Show next 10 games
+            location = "vs" if game['is_home'] else "@"
+            conf_tag = " (CONF)" if game['is_conference'] else ""
+            game_date = season.week_to_date(game['week'] - 1)  # week is 1-indexed
+
+            st.markdown(
+                f'<div style="padding: 10px; margin: 5px 0; border-left: 3px solid #888; background-color: #1a1a1a;">'
+                f'<strong>{game_date}</strong> • {location} {game["opponent"]}{conf_tag}'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
 
 def league_page():
