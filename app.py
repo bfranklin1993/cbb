@@ -149,7 +149,7 @@ def season_page():
     st.progress(season.current_week / season.total_weeks, text=f"Week {season.current_week}/{season.total_weeks}")
 
     # Tabs for different views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Simulate", "Schedule", "Roster", "Standings", "Recruiting"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["Simulate", "Schedule", "Stats", "Roster", "Standings", "Recruiting"])
 
     with tab1:
         simulate_tab(season, team)
@@ -158,12 +158,15 @@ def season_page():
         schedule_tab(season, team)
 
     with tab3:
-        roster_tab(team)
+        stats_tab(team)
 
     with tab4:
-        standings_tab()
+        roster_tab(team)
 
     with tab5:
+        standings_tab()
+
+    with tab6:
         recruiting_tab_in_season()
 
 
@@ -252,6 +255,78 @@ def schedule_tab(season, team):
     played = sum(1 for g in schedule if g['played'])
     total = len(schedule)
     st.caption(f"Games played: {played}/{total}")
+
+
+def stats_tab(team):
+    """Player statistics tab"""
+    st.markdown("### Player Statistics")
+
+    if not team.roster:
+        st.info("No players on roster.")
+        return
+
+    # Filter options
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        sort_by = st.selectbox("Sort by:", ["PPG", "RPG", "APG", "SPG", "BPG", "OVR", "Name"])
+
+    # Create stats dataframe
+    stats_data = []
+    year_names = {1: "FR", 2: "SO", 3: "JR", 4: "SR"}
+
+    for player in team.roster:
+        stats = player.get_stats_per_game()
+        stats_data.append({
+            "Name": player.name,
+            "Pos": player.position,
+            "Yr": year_names.get(player.year, ""),
+            "GP": player.games_played,
+            "PPG": stats['PPG'],
+            "RPG": stats['RPG'],
+            "APG": stats['APG'],
+            "SPG": stats['SPG'],
+            "BPG": stats['BPG'],
+            "OVR": player.overall_rating()
+        })
+
+    df = pd.DataFrame(stats_data)
+
+    # Sort based on selection
+    if sort_by == "Name":
+        df = df.sort_values("Name")
+    elif sort_by == "OVR":
+        df = df.sort_values("OVR", ascending=False)
+    else:
+        df = df.sort_values(sort_by, ascending=False)
+
+    # Format numeric columns
+    df["PPG"] = df["PPG"].map(lambda x: f"{x:.1f}")
+    df["RPG"] = df["RPG"].map(lambda x: f"{x:.1f}")
+    df["APG"] = df["APG"].map(lambda x: f"{x:.1f}")
+    df["SPG"] = df["SPG"].map(lambda x: f"{x:.1f}")
+    df["BPG"] = df["BPG"].map(lambda x: f"{x:.1f}")
+    df["OVR"] = df["OVR"].map(lambda x: f"{x:.1f}")
+
+    st.dataframe(df, use_container_width=True, hide_index=True, height=500)
+
+    # Team stats summary
+    st.markdown("### Team Averages")
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    if team.games_played > 0:
+        total_ppg = sum(p.points for p in team.roster) / team.games_played
+        total_rpg = sum(p.rebounds for p in team.roster) / team.games_played
+        total_apg = sum(p.assists for p in team.roster) / team.games_played
+        total_spg = sum(p.steals for p in team.roster) / team.games_played
+        total_bpg = sum(p.blocks for p in team.roster) / team.games_played
+
+        col1.metric("PPG", f"{total_ppg:.1f}")
+        col2.metric("RPG", f"{total_rpg:.1f}")
+        col3.metric("APG", f"{total_apg:.1f}")
+        col4.metric("SPG", f"{total_spg:.1f}")
+        col5.metric("BPG", f"{total_bpg:.1f}")
+    else:
+        st.info("No games played yet this season.")
 
 
 def roster_tab(team):

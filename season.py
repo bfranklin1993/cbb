@@ -21,17 +21,27 @@ class Season:
         self.total_weeks = 18  # 18 weeks of regular season (Nov-Feb)
 
     def generate_schedule(self):
-        """Generate realistic 25-30 game schedule per team"""
+        """Generate realistic 30-33 game schedule per team"""
         # Schedule is now a list of weeks, where each week is a list of games
         self.schedule = [[] for _ in range(self.total_weeks)]
         scheduled_matchups = set()
         all_games = []
 
-        # Generate conference games - each team plays all conference opponents
-        # For smaller conferences, some opponents twice; larger conferences once
+        # Generate conference games - realistic counts based on conference size
         for conference in CONFERENCES.keys():
             conf_teams = [t for t in self.all_teams if t.conference == conference]
             conf_size = len(conf_teams)
+
+            # Determine number of conference games based on conference size
+            if conf_size >= 16:
+                # Large conferences: 18-20 games (like SEC, ACC, Big Ten)
+                target_conf_games = 20 if conf_size >= 17 else 19
+            elif conf_size >= 10:
+                # Medium conferences: 18-20 games
+                target_conf_games = 19
+            else:
+                # Small conferences: Play everyone home and away
+                target_conf_games = (conf_size - 1) * 2
 
             # Play each conference opponent at least once
             for i, team1 in enumerate(conf_teams):
@@ -46,25 +56,31 @@ class Season:
                             all_games.append((team2, team1, True))
                         scheduled_matchups.add(matchup)
 
-            # For smaller conferences (< 12 teams), play some opponents twice (home/away)
-            if conf_size < 12:
+            # Add return games to reach target conference games
+            games_per_team_so_far = conf_size - 1
+            if games_per_team_so_far < target_conf_games:
+                # Calculate how many return games needed
+                return_games_needed = (target_conf_games - games_per_team_so_far) // 2
+
+                # Add return games for random matchups
                 for i, team1 in enumerate(conf_teams):
-                    # Select random opponents for return games to reach ~18 conference games
-                    num_return_games = max(0, min(18 - conf_size, (conf_size - 1) // 2))
-                    if num_return_games > 0:
-                        opponents = random.sample([t for t in conf_teams if t != team1],
-                                                 min(num_return_games, len(conf_teams) - 1))
+                    if return_games_needed > 0:
+                        # Select random opponents for return games
+                        num_return = min(return_games_needed, len(conf_teams) - 1)
+                        opponents = random.sample([t for t in conf_teams if t != team1], num_return)
 
                         for team2 in opponents:
-                            # Add return game (opposite home/away from first game)
-                            all_games.append((team1, team2, True))
+                            # Add return game (opposite venue from first game)
+                            all_games.append((team2, team1, True))
 
-        # Generate non-conference games - 8-10 games per team
+        # Generate non-conference games - 5-7 games per team
+        # (Since each matchup creates games for 2 teams, we request fewer)
         for team in self.all_teams:
             other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
-            # Each team plays 8-10 non-conference games
-            num_non_conf = min(random.randint(8, 10), len(other_conf_teams))
+            # Each team plays 5-7 non-conference games
+            # This results in ~10-14 total non-conf games per team when counting both sides
+            num_non_conf = min(random.randint(5, 7), len(other_conf_teams))
             opponents = random.sample(other_conf_teams, num_non_conf)
 
             for opponent in opponents:

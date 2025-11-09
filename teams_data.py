@@ -167,14 +167,63 @@ CONFERENCES = {
     ]
 }
 
+# Team prestige levels - determines base roster quality
+# ELITE: 8.0-9.0, HIGH: 7.0-8.0, UPPER_MID: 6.0-7.0, MID: 5.0-6.0, LOW_MID: 4.0-5.0, LOW: 3.0-4.0
+TEAM_PRESTIGE = {
+    # ELITE Programs (Blue Bloods and Top Programs)
+    "Duke": "ELITE", "North Carolina": "ELITE", "Kansas": "ELITE", "Kentucky": "ELITE",
+    "UConn": "ELITE", "Villanova": "ELITE", "Gonzaga": "ELITE",
+
+    # HIGH Programs (Perennial contenders)
+    "Michigan State": "HIGH", "Purdue": "HIGH", "Arizona": "HIGH", "Houston": "HIGH",
+    "UCLA": "HIGH", "Baylor": "HIGH", "Tennessee": "HIGH", "Auburn": "HIGH",
+    "Creighton": "HIGH", "Texas": "HIGH", "Alabama": "HIGH", "Illinois": "HIGH",
+    "San Diego State": "HIGH", "Marquette": "HIGH", "Xavier": "HIGH", "Wisconsin": "HIGH",
+    "Virginia": "HIGH", "Michigan": "HIGH", "Florida": "HIGH",
+
+    # UPPER_MID Programs (Strong programs, occasional contenders)
+    "Texas Tech": "UPPER_MID", "Arkansas": "UPPER_MID", "Iowa": "UPPER_MID",
+    "USC": "UPPER_MID", "Ohio State": "UPPER_MID", "Indiana": "UPPER_MID",
+    "Miami": "UPPER_MID", "Florida State": "UPPER_MID", "NC State": "UPPER_MID",
+    "Syracuse": "UPPER_MID", "Maryland": "UPPER_MID", "Iowa State": "UPPER_MID",
+    "Oklahoma State": "UPPER_MID", "LSU": "UPPER_MID", "Saint Mary's": "UPPER_MID",
+    "Memphis": "UPPER_MID", "Providence": "UPPER_MID", "Seton Hall": "UPPER_MID",
+    "VCU": "UPPER_MID", "Dayton": "UPPER_MID", "Ole Miss": "UPPER_MID",
+    "Texas A&M": "UPPER_MID", "West Virginia": "UPPER_MID", "TCU": "UPPER_MID",
+    "Utah": "UPPER_MID", "Colorado": "UPPER_MID", "BYU": "UPPER_MID",
+    "Oregon": "UPPER_MID", "Arizona State": "UPPER_MID", "Clemson": "UPPER_MID",
+
+    # MID Programs (Decent programs, can make noise)
+    "Pittsburgh": "MID", "Louisville": "MID", "Virginia Tech": "MID",
+    "Wake Forest": "MID", "Georgia Tech": "MID", "Notre Dame": "MID",
+    "Stanford": "MID", "California": "MID", "SMU": "MID",
+    "Rutgers": "MID", "Penn State": "MID", "Minnesota": "MID",
+    "Northwestern": "MID", "Nebraska": "MID", "Washington": "MID",
+    "Kansas State": "MID", "Cincinnati": "MID", "UCF": "MID",
+    "Mississippi State": "MID", "Missouri": "MID", "South Carolina": "MID",
+    "Georgia": "MID", "Vanderbilt": "MID", "Oklahoma": "MID",
+    "Butler": "MID", "St. John's": "MID", "Georgetown": "MID",
+    "Wichita State": "MID", "Temple": "MID", "Nevada": "MID",
+    "New Mexico": "MID", "Utah State": "MID", "Boise State": "MID",
+    "Colorado State": "MID", "UNLV": "MID", "San Francisco": "MID",
+    "Richmond": "MID", "St. Louis": "MID", "Davidson": "MID",
+    "Drake": "MID", "Bradley": "MID", "Princeton": "MID",
+    "Charleston": "MID", "Grand Canyon": "MID", "Boston College": "MID",
+}
+
+def get_team_prestige(team_name: str) -> str:
+    """Get prestige level for a team, default to LOW_MID if not specified"""
+    return TEAM_PRESTIGE.get(team_name, "LOW_MID")
+
 
 def create_all_teams():
-    """Create all college basketball teams"""
+    """Create all college basketball teams with prestige levels"""
     all_teams = []
 
     for conference, team_names in CONFERENCES.items():
         for team_name in team_names:
-            team = Team(team_name, conference)
+            prestige = get_team_prestige(team_name)
+            team = Team(team_name, conference, prestige=prestige)
             all_teams.append(team)
 
     return all_teams

@@ -71,9 +71,10 @@ class Player:
 class Team:
     """Represents a college basketball team"""
 
-    def __init__(self, name: str, conference: str):
+    def __init__(self, name: str, conference: str, prestige: str = "LOW_MID"):
         self.name = name
         self.conference = conference
+        self.prestige = prestige  # ELITE, HIGH, UPPER_MID, MID, LOW_MID, LOW
         self.roster: List[Player] = []
 
         # Systems
@@ -102,17 +103,30 @@ class Team:
         self._set_default_rotation()
 
     def _generate_roster(self):
-        """Generate a balanced roster of 12 players (3 per class)"""
+        """Generate a balanced roster of 12 players (3 per class) based on prestige"""
         first_names = ["James", "Michael", "John", "David", "Chris", "Matt", "Ryan",
-                      "Kevin", "Tyler", "Brandon", "Jason", "Josh", "Andrew", "Nick"]
+                      "Kevin", "Tyler", "Brandon", "Jason", "Josh", "Andrew", "Nick",
+                      "Marcus", "Jordan", "Jayden", "Cameron", "Malik", "Isaiah"]
         last_names = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia",
-                     "Miller", "Davis", "Martinez", "Wilson", "Anderson", "Taylor"]
+                     "Miller", "Davis", "Martinez", "Wilson", "Anderson", "Taylor",
+                     "Thomas", "Jackson", "White", "Harris", "Martin", "Thompson"]
 
         # Positions: need variety across all positions
         positions_needed = ["PG", "PG", "SG", "SG", "SF", "SF", "PF", "PF", "C", "C", "SG", "SF"]
 
         # Years: 3 per class (Fr, So, Jr, Sr)
         years_needed = [1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]
+
+        # Prestige bonus - better teams get better players
+        prestige_bonus = {
+            "ELITE": 2.5,      # Duke, UNC, Kansas level
+            "HIGH": 1.8,       # Top 25 programs
+            "UPPER_MID": 1.2,  # Good programs
+            "MID": 0.6,        # Average programs
+            "LOW_MID": 0.0,    # Below average
+            "LOW": -0.5        # Weak programs
+        }
+        bonus = prestige_bonus.get(self.prestige, 0.0)
 
         # Shuffle to mix positions with years
         import random as rand
@@ -126,28 +140,32 @@ class Team:
             player = Player(name, pos, year)
 
             # Older players are generally better
-            year_bonus = (year - 1) * 0.5  # +0.5 per year
+            year_bonus = (year - 1) * 0.4  # +0.4 per year
 
-            # Some randomness in quality
-            if random.random() < 0.3:  # 30% chance to be notably better
-                player.shooting += random.uniform(1, 2) + year_bonus
-                player.defense += random.uniform(1, 2) + year_bonus
-                player.athleticism += random.uniform(1, 2) + year_bonus
-                player.basketball_iq += random.uniform(1, 2) + year_bonus
-                player.rebounding += random.uniform(1, 2) + year_bonus
+            # Total bonus combines prestige and year
+            total_bonus = bonus + year_bonus
+
+            # Some randomness in quality (elite teams have more star players)
+            star_player_chance = 0.25 if self.prestige in ["ELITE", "HIGH"] else 0.15
+            if random.random() < star_player_chance:  # Chance for star player
+                player.shooting += random.uniform(1.5, 2.5) + total_bonus
+                player.defense += random.uniform(1.5, 2.5) + total_bonus
+                player.athleticism += random.uniform(1.5, 2.5) + total_bonus
+                player.basketball_iq += random.uniform(1.5, 2.5) + total_bonus
+                player.rebounding += random.uniform(1.5, 2.5) + total_bonus
             else:
-                player.shooting += year_bonus
-                player.defense += year_bonus
-                player.athleticism += year_bonus
-                player.basketball_iq += year_bonus
-                player.rebounding += year_bonus
+                player.shooting += random.uniform(0, 1.0) + total_bonus
+                player.defense += random.uniform(0, 1.0) + total_bonus
+                player.athleticism += random.uniform(0, 1.0) + total_bonus
+                player.basketball_iq += random.uniform(0, 1.0) + total_bonus
+                player.rebounding += random.uniform(0, 1.0) + total_bonus
 
-            # Cap at 10
-            player.shooting = min(10, player.shooting)
-            player.defense = min(10, player.defense)
-            player.athleticism = min(10, player.athleticism)
-            player.basketball_iq = min(10, player.basketball_iq)
-            player.rebounding = min(10, player.rebounding)
+            # Cap at 10, floor at 1
+            player.shooting = max(1, min(10, player.shooting))
+            player.defense = max(1, min(10, player.defense))
+            player.athleticism = max(1, min(10, player.athleticism))
+            player.basketball_iq = max(1, min(10, player.basketball_iq))
+            player.rebounding = max(1, min(10, player.rebounding))
 
             self.roster.append(player)
 
