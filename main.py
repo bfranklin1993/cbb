@@ -10,6 +10,7 @@ from season import Season
 from tournament import run_postseason
 from game_engine import GameEngine
 from constants import OFFENSIVE_SYSTEMS, DEFENSIVE_SYSTEMS
+from recruiting import RecruitingClass, recruit_players_auto
 
 
 class Game:
@@ -107,6 +108,40 @@ class Game:
 
         input("\nPress Enter to continue...")
 
+    def view_team_schedule(self):
+        """View team's game results and schedule"""
+        print("\n" + "="*60)
+        print(f"{self.player_team.name} - SEASON RESULTS")
+        print("="*60)
+        print(f"\nRecord: {self.player_team.wins}-{self.player_team.losses}")
+        print(f"Games Played: {self.player_team.games_played}")
+
+        if len(self.player_team.results) > 0:
+            print("\n" + "-"*60)
+            print("GAME RESULTS:")
+            print("-"*60)
+
+            for i, result in enumerate(self.player_team.results, 1):
+                is_home = result["home_team"] == self.player_team.name
+                opponent = result["away_team"] if is_home else result["home_team"]
+                team_score = result["home_score"] if is_home else result["away_score"]
+                opp_score = result["away_score"] if is_home else result["home_score"]
+                location = "vs" if is_home else "@"
+
+                # Determine result
+                if team_score > opp_score:
+                    outcome = "W"
+                else:
+                    outcome = "L"
+
+                conf_marker = "*" if result["is_conference"] else " "
+
+                print(f"Game {i:2}: {outcome} {team_score:3}-{opp_score:3} {location} {opponent:25} {conf_marker}")
+        else:
+            print("\nNo games played yet.")
+
+        input("\nPress Enter to continue...")
+
     def set_game_plan(self):
         """Set offensive and defensive systems"""
         print("\n" + "="*60)
@@ -176,10 +211,11 @@ class Game:
             print("\n1. Simulate Week")
             print("2. View Roster")
             print("3. View Player Stats")
-            print("4. Adjust Game Plan")
-            print("5. View Standings")
-            print("6. View Conference Standings")
-            print("7. Simulate Rest of Season")
+            print("4. View Team Schedule/Results")
+            print("5. Adjust Game Plan")
+            print("6. View Standings")
+            print("7. View Conference Standings")
+            print("8. Simulate Rest of Season")
 
             choice = input("\nSelect option: ")
 
@@ -195,13 +231,16 @@ class Game:
                 self.view_player_stats()
 
             elif choice == "4":
-                self.set_game_plan()
+                self.view_team_schedule()
 
             elif choice == "5":
+                self.set_game_plan()
+
+            elif choice == "6":
                 self.current_season.display_standings(50)
                 input("\nPress Enter to continue...")
 
-            elif choice == "6":
+            elif choice == "7":
                 standings = self.current_season.get_conference_standings(self.player_team.conference)
                 print("\n" + "="*60)
                 print(f"{self.player_team.conference} STANDINGS")
@@ -214,7 +253,7 @@ class Game:
                     print(f"{team.name:<25}{overall:<12}{conf:<12}")
                 input("\nPress Enter to continue...")
 
-            elif choice == "7":
+            elif choice == "8":
                 print("\nSimulating rest of season...")
                 self.current_season.simulate_full_season()
                 print("Regular season complete!")
@@ -252,18 +291,181 @@ class Game:
         print("="*60)
         print("\nPlayer Development and Graduation...")
 
+        # Check graduating seniors
+        graduating_count = sum(1 for p in self.player_team.roster if p.year >= 4)
+
         self.current_season.advance_players()
 
-        # Reset records
+        print(f"\n{graduating_count} seniors graduated from your team.")
+        print("Players developed and improved their skills!")
+
+        input("\nPress Enter to start recruiting...")
+
+        # Recruiting phase
+        self.recruiting_phase()
+
+        # Reset records for all teams
         for team in self.all_teams:
             team.wins = 0
             team.losses = 0
             team.conference_wins = 0
             team.conference_losses = 0
+            team.games_played = 0
+            team.results = []
 
-        print("Players developed!")
-        print("Seniors graduated!")
-        print("New recruits added!")
+        print("\nOff-season complete!")
+        input("\nPress Enter to continue...")
+
+    def recruiting_phase(self):
+        """Handle recruiting for the off-season"""
+        print("\n" + "="*60)
+        print("RECRUITING")
+        print("="*60)
+
+        # Calculate open scholarships
+        open_spots = 12 - len(self.player_team.roster)
+        print(f"\nOpen Scholarships: {open_spots}")
+
+        if open_spots == 0:
+            print("Your roster is full!")
+            input("\nPress Enter to continue...")
+            return
+
+        # Create recruiting class
+        recruiting_class = RecruitingClass(self.current_year)
+
+        recruited_count = 0
+
+        while recruited_count < open_spots:
+            print("\n" + "="*60)
+            print(f"RECRUITING - {open_spots - recruited_count} spots remaining")
+            print("="*60)
+
+            print("\n1. View Available Recruits (All)")
+            print("2. View Available Recruits (by Position)")
+            print("3. View Your Commits")
+            print("4. Finish Recruiting (Auto-fill remaining spots)")
+
+            choice = input("\nSelect option: ")
+
+            if choice == "1":
+                self.view_recruits(recruiting_class, None)
+
+            elif choice == "2":
+                print("\nSelect position:")
+                print("1. PG  2. SG  3. SF  4. PF  5. C")
+                pos_choice = input("Select: ")
+                positions = {" 1": "PG", "2": "SG", "3": "SF", "4": "PF", "5": "C"}
+                position = positions.get(pos_choice, None)
+
+                if position:
+                    self.view_recruits(recruiting_class, position)
+
+            elif choice == "3":
+                self.view_commits(recruiting_class)
+
+            elif choice == "4":
+                # Auto-fill remaining spots
+                remaining = open_spots - recruited_count
+                print(f"\nAuto-recruiting {remaining} players...")
+
+                recruited = recruit_players_auto(self.player_team, recruiting_class, remaining)
+                recruited_count += len(recruited)
+
+                for recruit in recruited:
+                    print(f"Recruited: {recruit.name} ({recruit.position}) - Potential: {recruit.potential}/10")
+
+                input("\nPress Enter to continue...")
+                break
+
+            # Check if we filled all spots through manual recruiting
+            current_recruited = sum(1 for r in recruiting_class.recruits
+                                  if r.committed and r.committed_to == self.player_team.name)
+            recruited_count = current_recruited
+
+        # Add all committed recruits to roster
+        for recruit in recruiting_class.recruits:
+            if recruit.committed and recruit.committed_to == self.player_team.name:
+                player = recruit.to_player()
+                if player not in self.player_team.roster:
+                    self.player_team.roster.append(player)
+
+        # Other teams auto-recruit
+        print("\nOther teams are recruiting...")
+        for team in self.all_teams:
+            if team != self.player_team:
+                open_spots_team = 12 - len(team.roster)
+                if open_spots_team > 0:
+                    recruit_players_auto(team, recruiting_class, open_spots_team)
+
+        print("Recruiting complete!")
+
+    def view_recruits(self, recruiting_class: RecruitingClass, position: str = None):
+        """View available recruits"""
+        recruits = recruiting_class.get_available_recruits(position)
+
+        print("\n" + "="*60)
+        title = f"AVAILABLE RECRUITS" + (f" - {position}" if position else "")
+        print(title)
+        print("="*60)
+        print(f"\n{'#':<4}{'Name':<20}{'Pos':<5}{'Pot':<5}{'Int':<5}{'OVR':<6}{'SHT':<5}{'DEF':<5}{'ATH':<5}")
+        print("-" * 60)
+
+        for i, recruit in enumerate(recruits[:30], 1):  # Show top 30
+            print(f"{i:<4}{recruit.name:<20}{recruit.position:<5}"
+                  f"{recruit.potential:<5}{recruit.interest:<5}"
+                  f"{recruit.overall_rating():<6.1f}"
+                  f"{recruit.shooting:<5.1f}{recruit.defense:<5.1f}{recruit.athleticism:<5.1f}")
+
+        # Option to recruit
+        choice = input("\nEnter recruit # to attempt recruitment (0 to go back): ")
+
+        try:
+            choice_num = int(choice)
+            if choice_num > 0 and choice_num <= len(recruits[:30]):
+                recruit = recruits[choice_num - 1]
+                self.attempt_recruit(recruit, recruiting_class)
+        except ValueError:
+            pass
+
+    def attempt_recruit(self, recruit, recruiting_class: RecruitingClass):
+        """Attempt to recruit a player"""
+        print(f"\n Attempting to recruit {recruit.name}...")
+        print(f"Position: {recruit.position}, Potential: {recruit.potential}/10")
+        print(f"Interest Level: {recruit.interest}%")
+
+        confirm = input("\nCommit a scholarship? (y/n): ")
+
+        if confirm.lower() == 'y':
+            success = recruiting_class.recruit_player(recruit, self.player_team)
+
+            if success:
+                print(f"\n*** SUCCESS! {recruit.name} commits to {self.player_team.name}! ***")
+                player = recruit.to_player()
+                self.player_team.roster.append(player)
+            else:
+                print(f"\n{recruit.name} declined your offer.")
+                print(f"Interest decreased to {recruit.interest}%")
+
+            input("\nPress Enter to continue...")
+
+    def view_commits(self, recruiting_class: RecruitingClass):
+        """View current recruiting commits"""
+        commits = [r for r in recruiting_class.recruits
+                  if r.committed and r.committed_to == self.player_team.name]
+
+        print("\n" + "="*60)
+        print(f"YOUR COMMITS ({len(commits)})")
+        print("="*60)
+
+        if len(commits) == 0:
+            print("\nNo commits yet.")
+        else:
+            print(f"\n{'Name':<20}{'Pos':<5}{'Pot':<5}{'OVR':<6}")
+            print("-" * 40)
+            for recruit in commits:
+                print(f"{recruit.name:<20}{recruit.position:<5}"
+                      f"{recruit.potential:<5}{recruit.overall_rating():<6.1f}")
 
         input("\nPress Enter to continue...")
 

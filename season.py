@@ -23,31 +23,47 @@ class Season:
     def generate_schedule(self):
         """Generate the season schedule"""
         self.schedule = []
+        scheduled_matchups = set()  # Track which matchups we've scheduled
 
+        # Generate conference games - each pair plays once (home court assigned)
+        for conference in CONFERENCES.keys():
+            conf_teams = [t for t in self.all_teams if t.conference == conference]
+
+            # Round robin - each team plays each other once
+            for i, team1 in enumerate(conf_teams):
+                for team2 in conf_teams[i+1:]:
+                    # Create a unique matchup identifier
+                    matchup = tuple(sorted([team1.name, team2.name]))
+
+                    if matchup not in scheduled_matchups:
+                        # Randomly assign home team
+                        if random.random() < 0.5:
+                            self.schedule.append((team1, team2, True))
+                        else:
+                            self.schedule.append((team2, team1, True))
+                        scheduled_matchups.add(matchup)
+
+        # Generate non-conference games
         for team in self.all_teams:
-            conference_teams = [t for t in self.all_teams if t.conference == team.conference and t != team]
-            other_teams = [t for t in self.all_teams if t.conference != team.conference]
+            other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
-            # Play each conference team twice (home and away)
-            conference_games = []
-            for opponent in conference_teams:
-                # Home game
-                conference_games.append((team, opponent, True))
+            # Each team plays 10 non-conference games
+            num_non_conf = min(10, len(other_conf_teams))
+            opponents = random.sample(other_conf_teams, num_non_conf)
 
-            # Play ~10 non-conference games
-            non_conf_opponents = random.sample(other_teams, min(10, len(other_teams)))
-            non_conf_games = [(team, opp, False) for opp in non_conf_opponents]
+            for opponent in opponents:
+                matchup = tuple(sorted([team.name, opponent.name]))
 
-            team_schedule = conference_games + non_conf_games
-            random.shuffle(team_schedule)
+                if matchup not in scheduled_matchups:
+                    # Randomly assign home team
+                    if random.random() < 0.5:
+                        self.schedule.append((team, opponent, False))
+                    else:
+                        self.schedule.append((opponent, team, False))
+                    scheduled_matchups.add(matchup)
 
-            # Only add if this team is "home" to avoid duplicates
-            for game in team_schedule[:30]:  # Limit to 30 games
-                if game not in self.schedule:
-                    # Check reverse (away game) isn't already scheduled
-                    reverse = (game[1], game[0], game[2])
-                    if reverse not in self.schedule:
-                        self.schedule.append(game)
+        # Shuffle schedule for variety
+        random.shuffle(self.schedule)
 
     def simulate_week(self) -> List[dict]:
         """Simulate one week of games"""

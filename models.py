@@ -85,6 +85,11 @@ class Team:
         self.losses = 0
         self.conference_wins = 0
         self.conference_losses = 0
+        self.games_played = 0
+
+        # Schedule and results
+        self.schedule = []  # List of upcoming games
+        self.results = []   # List of completed games with box scores
 
         # Generate initial roster
         self._generate_roster()

@@ -39,6 +39,10 @@ class GameEngine:
         home_score = self._calculate_team_score(home_team, away_team, is_home=True)
         away_score = self._calculate_team_score(away_team, home_team, is_home=False)
 
+        # Update team games played
+        home_team.games_played += 1
+        away_team.games_played += 1
+
         # Update records
         if home_score > away_score:
             home_team.wins += 1
@@ -149,7 +153,7 @@ class GameEngine:
 
     def simulate_game_with_details(self, home_team: Team, away_team: Team, is_conference: bool = False) -> Dict:
         """
-        Simulate a game and return detailed results
+        Simulate a game and return detailed results with box score
         """
         home_score, away_score = self.simulate_game(home_team, away_team, is_conference)
 
@@ -159,7 +163,14 @@ class GameEngine:
             "home_score": home_score,
             "away_score": away_score,
             "winner": home_team.name if home_score > away_score else away_team.name,
-            "margin": abs(home_score - away_score)
+            "margin": abs(home_score - away_score),
+            "is_conference": is_conference,
+            "home_team_obj": home_team,
+            "away_team_obj": away_team
         }
+
+        # Store result in both teams' history
+        home_team.results.append(result)
+        away_team.results.append(result)
 
         return result
