@@ -105,51 +105,71 @@ class GameEngine:
         return max(50, final_score)  # Minimum 50 points
 
     def _update_player_stats(self, team: Team, team_score: int):
-        """Update player statistics after a game"""
-        starters = team.get_starting_five()
+        """Update player statistics after a game using rotation system"""
+        # Get rotation distribution percentages
+        starter_pct, backup_pct, bench_pct = team.get_rotation_distribution()
 
-        # Distribute points among starters (with some randomness)
-        for player in starters:
-            player.games_played += 1
+        # Calculate stats pool for each group
+        starter_stats = team_score * starter_pct
+        backup_stats = team_score * backup_pct
+        bench_stats = team_score * bench_pct
 
-            # Points based on shooting ability and some randomness
-            shooting_factor = player.shooting / 10
-            points = int(team_score * shooting_factor * random.uniform(0.08, 0.18))
-            player.points += points
-
-            # Rebounds based on rebounding attribute
-            rebounding_factor = player.rebounding / 10
-            rebounds = int(random.uniform(2, 10) * rebounding_factor)
-            player.rebounds += rebounds
-
-            # Assists based on basketball IQ (guards get more)
-            if player.position in ["PG", "SG"]:
-                iq_factor = player.basketball_iq / 10
-                assists = int(random.uniform(1, 6) * iq_factor)
-                player.assists += assists
-            else:
-                player.assists += random.randint(0, 2)
-
-            # Steals based on defense
-            defense_factor = player.defense / 10
-            steals = int(random.uniform(0, 3) * defense_factor)
-            player.steals += steals
-
-            # Blocks based on rebounding and position (big men get more)
-            if player.position in ["PF", "C"]:
-                rebounding_factor = player.rebounding / 10
-                blocks = int(random.uniform(0, 3) * rebounding_factor)
-                player.blocks += blocks
-            else:
-                player.blocks += random.randint(0, 1)
-
-        # Bench players get minimal stats
-        for player in team.roster[5:]:
-            if random.random() < 0.6:  # 60% chance bench player sees action
+        # Distribute stats to starters
+        for idx in team.rotation_starters:
+            if idx < len(team.roster):
+                player = team.roster[idx]
                 player.games_played += 1
-                player.points += random.randint(0, 5)
-                player.rebounds += random.randint(0, 3)
-                player.assists += random.randint(0, 2)
+                self._assign_player_stats(player, starter_stats / 5)
+
+        # Distribute stats to backups
+        for idx in team.rotation_backups:
+            if idx < len(team.roster):
+                player = team.roster[idx]
+                player.games_played += 1
+                self._assign_player_stats(player, backup_stats / 5)
+
+        # Distribute stats to bench (may not play every game)
+        for idx in team.rotation_bench:
+            if idx < len(team.roster):
+                player = team.roster[idx]
+                if random.random() < 0.7:  # 70% chance bench player sees action
+                    player.games_played += 1
+                    self._assign_player_stats(player, bench_stats / 2)
+
+    def _assign_player_stats(self, player: Player, points_pool: float):
+        """Assign stats to a player based on their attributes"""
+        # Points based on shooting ability and some randomness
+        shooting_factor = player.shooting / 10
+        points = int(points_pool * shooting_factor * random.uniform(0.8, 1.2))
+        player.points += points
+
+        # Rebounds based on rebounding attribute
+        rebounding_factor = player.rebounding / 10
+        rebounds = int(random.uniform(1, 6) * rebounding_factor * (points_pool / 10))
+        player.rebounds += rebounds
+
+        # Assists based on basketball IQ (guards get more)
+        if player.position in ["PG", "SG"]:
+            iq_factor = player.basketball_iq / 10
+            assists = int(random.uniform(1, 4) * iq_factor * (points_pool / 10))
+            player.assists += assists
+        else:
+            assists = int(random.uniform(0, 2) * (points_pool / 15))
+            player.assists += assists
+
+        # Steals based on defense
+        defense_factor = player.defense / 10
+        steals = int(random.uniform(0, 2) * defense_factor * (points_pool / 15))
+        player.steals += steals
+
+        # Blocks based on rebounding and position (big men get more)
+        if player.position in ["PF", "C"]:
+            rebounding_factor = player.rebounding / 10
+            blocks = int(random.uniform(0, 2) * rebounding_factor * (points_pool / 15))
+            player.blocks += blocks
+        else:
+            if random.random() < 0.3:
+                player.blocks += 1
 
     def simulate_game_with_details(self, home_team: Team, away_team: Team, is_conference: bool = False) -> Dict:
         """
