@@ -3,8 +3,15 @@ Recruiting system for college basketball
 """
 
 import random
-from typing import List
+from typing import List, Dict
 from models import Player, Team
+
+
+# US States for recruit locations
+STATES = ["AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN",
+          "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV",
+          "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN",
+          "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY"]
 
 
 class Recruit:
@@ -16,9 +23,20 @@ class Recruit:
         self.potential = potential  # 1-10 scale (scouting consensus)
         self.ranking = ranking  # National ranking (1-1080)
         self.stars = self._calculate_stars()  # Star rating (2-5)
-        self.interest = random.randint(40, 100)  # Interest in your program
+        self.state = random.choice(STATES)  # Home state
+
+        # Base interest starts at 50
+        self.interest = 50
         self.committed = False
         self.committed_to = None
+
+        # Recruiting actions tracking
+        self.times_scouted = 0
+        self.times_visited = 0
+        self.scholarship_offered = False
+
+        # Recruit preferences (what they value most) - each recruit has 2-3 priorities
+        self.preferences = self._generate_preferences()
 
         # Generate ACTUAL attributes with hidden potential variance
         # Stars show what scouts THINK, but actual talent varies!
@@ -93,10 +111,174 @@ class Recruit:
         else:
             return 2
 
+    def _generate_preferences(self) -> Dict[str, int]:
+        """Generate recruit's preferences (what they value)
+        Each preference has a weight 1-5 (5 = most important)
+        """
+        prefs = {}
+
+        # Randomly select 2-3 top priorities
+        all_factors = ["prestige", "playing_time", "location", "conference", "system_fit"]
+        num_priorities = random.randint(2, 3)
+        priorities = random.sample(all_factors, num_priorities)
+
+        # Assign weights (top priorities get higher weight)
+        for factor in all_factors:
+            if factor in priorities[:1]:  # Top priority
+                prefs[factor] = random.randint(4, 5)
+            elif factor in priorities:  # Secondary priority
+                prefs[factor] = random.randint(3, 4)
+            else:  # Low priority
+                prefs[factor] = random.randint(1, 2)
+
+        return prefs
+
+    def get_offense_rating(self) -> str:
+        """Get visible offense rating (Bad/Poor/Average/Good/Elite)"""
+        avg = (self.shooting + self.basketball_iq) / 2
+        return self._rating_to_label(avg)
+
+    def get_defense_rating(self) -> str:
+        """Get visible defense rating (Bad/Poor/Average/Good/Elite)"""
+        avg = (self.defense + self.athleticism) / 2
+        return self._rating_to_label(avg)
+
+    def get_fundamentals_rating(self) -> str:
+        """Get visible fundamentals rating (Bad/Poor/Average/Good/Elite)"""
+        avg = (self.basketball_iq + self.rebounding) / 2
+        return self._rating_to_label(avg)
+
+    def _rating_to_label(self, rating: float) -> str:
+        """Convert numeric rating to label"""
+        if rating >= 8.5:
+            return "Elite"
+        elif rating >= 7.0:
+            return "Good"
+        elif rating >= 5.0:
+            return "Average"
+        elif rating >= 3.5:
+            return "Poor"
+        else:
+            return "Bad"
+
     def overall_rating(self) -> float:
         """Calculate overall rating"""
         return (self.shooting + self.defense + self.athleticism +
                 self.basketball_iq + self.rebounding) / 5
+
+    def calculate_team_fit(self, team: Team) -> float:
+        """
+        Calculate how well this recruit fits with the team (0-100)
+        Based on recruit's preferences and team attributes
+        """
+        fit_score = 0
+        max_score = 0
+
+        # Map team prestige to score
+        prestige_scores = {
+            "ELITE": 100,
+            "HIGH": 85,
+            "UPPER_MID": 70,
+            "MID": 55,
+            "LOW_MID": 40,
+            "LOW": 25
+        }
+
+        # Prestige factor
+        weight = self.preferences.get("prestige", 1)
+        max_score += weight * 100
+        fit_score += weight * prestige_scores.get(team.prestige, 50)
+
+        # Playing time factor (based on roster strength at position)
+        weight = self.preferences.get("playing_time", 1)
+        max_score += weight * 100
+        position_players = [p for p in team.roster if p.position == self.position]
+        avg_position_rating = sum(p.overall_rating() for p in position_players) / max(len(position_players), 1)
+        # Lower avg rating = more playing time available
+        playing_time_score = max(0, 100 - (avg_position_rating * 10))
+        fit_score += weight * playing_time_score
+
+        # Location factor (same state or nearby)
+        weight = self.preferences.get("location", 1)
+        max_score += weight * 100
+        # For now, random location fit (could map teams to states later)
+        location_score = random.randint(40, 80)
+        fit_score += weight * location_score
+
+        # Conference factor (prestige of conference)
+        weight = self.preferences.get("conference", 1)
+        max_score += weight * 100
+        # Power conferences score higher
+        power_conferences = ["ACC", "Big Ten", "Big 12", "SEC", "Big East", "Pac-12"]
+        conf_score = 90 if team.conference in power_conferences else 60
+        fit_score += weight * conf_score
+
+        # System fit (always moderate since systems can be learned)
+        weight = self.preferences.get("system_fit", 1)
+        max_score += weight * 100
+        system_score = random.randint(60, 85)
+        fit_score += weight * system_score
+
+        # Normalize to 0-100
+        return min(100, (fit_score / max_score) * 100) if max_score > 0 else 50
+
+    def scout_action(self, team: Team):
+        """Scout a player - increases interest slightly, reveals more info"""
+        self.times_scouted += 1
+
+        # Small interest boost
+        team_fit = self.calculate_team_fit(team)
+        interest_boost = random.randint(2, 5) + (team_fit / 20)  # 2-10 points
+        self.interest = min(100, self.interest + interest_boost)
+
+    def visit_action(self, team: Team):
+        """Visit a player - significant interest boost"""
+        self.times_visited += 1
+
+        # Bigger interest boost based on team fit
+        team_fit = self.calculate_team_fit(team)
+        interest_boost = random.randint(5, 10) + (team_fit / 10)  # 10-20 points
+        self.interest = min(100, self.interest + interest_boost)
+
+    def offer_scholarship(self, team: Team):
+        """Offer scholarship - required before player can commit"""
+        self.scholarship_offered = True
+
+        # Interest boost for being offered
+        team_fit = self.calculate_team_fit(team)
+        interest_boost = random.randint(3, 8) + (team_fit / 15)  # 8-15 points
+        self.interest = min(100, self.interest + interest_boost)
+
+    def can_commit(self, team: Team) -> bool:
+        """Check if recruit can commit (needs scholarship offer + high enough interest)"""
+        if not self.scholarship_offered:
+            return False
+
+        if self.committed:
+            return False
+
+        # Need at least 65 interest to commit (varies by team fit)
+        team_fit = self.calculate_team_fit(team)
+        required_interest = max(50, 80 - (team_fit / 4))  # 55-80 based on fit
+
+        return self.interest >= required_interest
+
+    def attempt_commit(self, team: Team) -> bool:
+        """Attempt to get recruit to commit"""
+        if not self.can_commit(team):
+            return False
+
+        # Success based on interest level
+        success_chance = self.interest
+
+        if random.uniform(0, 100) < success_chance:
+            self.committed = True
+            self.committed_to = team.name
+            return True
+
+        # Failed - slight interest decrease
+        self.interest = max(0, self.interest - random.randint(3, 8))
+        return False
 
     def to_player(self) -> Player:
         """Convert recruit to player"""
