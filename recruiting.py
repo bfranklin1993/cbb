@@ -13,17 +13,69 @@ class Recruit:
     def __init__(self, name: str, position: str, potential: int, ranking: int = 0):
         self.name = name
         self.position = position
-        self.potential = potential  # 1-10 scale (recruiting ranking)
-        self.ranking = ranking  # National ranking (1-300)
+        self.potential = potential  # 1-10 scale (scouting consensus)
+        self.ranking = ranking  # National ranking (1-1080)
         self.stars = self._calculate_stars()  # Star rating (2-5)
         self.interest = random.randint(40, 100)  # Interest in your program
         self.committed = False
         self.committed_to = None
 
-        # Generate base attributes based on potential
-        base = potential - 2
-        variance = 1.5
+        # Generate ACTUAL attributes with hidden potential variance
+        # Stars show what scouts THINK, but actual talent varies!
+        # This creates busts and hidden gems
 
+        # Determine outcome: will player live up to hype, bust, or exceed?
+        outcome_roll = random.random()
+
+        if self.stars == 5:  # Elite recruits (potential 9-10)
+            # 70% live up to hype, 20% decent, 10% bust
+            if outcome_roll < 0.70:  # Lives up to hype
+                base = self.potential - 1.5
+                variance = 1.0
+            elif outcome_roll < 0.90:  # Decent but not elite
+                base = self.potential - 2.5
+                variance = 1.0
+            else:  # Major bust
+                base = self.potential - 4.0
+                variance = 1.5
+
+        elif self.stars == 4:  # Very good recruits (potential 8)
+            # 65% good, 25% okay, 10% exceed
+            if outcome_roll < 0.65:  # Good as expected
+                base = self.potential - 1.5
+                variance = 1.2
+            elif outcome_roll < 0.90:  # Okay, not great
+                base = self.potential - 2.5
+                variance = 1.0
+            else:  # Exceeds expectations!
+                base = self.potential - 0.5
+                variance = 1.0
+
+        elif self.stars == 3:  # Solid recruits (potential 6-7)
+            # 60% average, 25% below, 15% exceed
+            if outcome_roll < 0.60:  # Average
+                base = self.potential - 2.0
+                variance = 1.5
+            elif outcome_roll < 0.85:  # Below average
+                base = self.potential - 3.0
+                variance = 1.2
+            else:  # Hidden gem!
+                base = self.potential
+                variance = 1.5
+
+        else:  # 2-star recruits (potential 3-5)
+            # 60% stay mediocre, 30% solid, 10% hidden gem
+            if outcome_roll < 0.60:  # Stays mediocre
+                base = self.potential - 2.0
+                variance = 1.3
+            elif outcome_roll < 0.90:  # Solid contributor
+                base = self.potential - 0.5
+                variance = 1.5
+            else:  # Hidden gem! (Steph Curry scenario)
+                base = self.potential + 2.0
+                variance = 1.5
+
+        # Generate attributes with variance
         self.shooting = max(1, min(10, base + random.uniform(-variance, variance)))
         self.defense = max(1, min(10, base + random.uniform(-variance, variance)))
         self.athleticism = max(1, min(10, base + random.uniform(-variance, variance)))
