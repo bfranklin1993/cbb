@@ -149,7 +149,7 @@ def season_page():
     st.progress(season.current_week / season.total_weeks, text=f"Week {season.current_week}/{season.total_weeks}")
 
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["Simulate", "Schedule", "Roster", "Standings"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["Simulate", "Schedule", "Roster", "Standings", "Recruiting"])
 
     with tab1:
         simulate_tab(season, team)
@@ -162,6 +162,9 @@ def season_page():
 
     with tab4:
         standings_tab()
+
+    with tab5:
+        recruiting_tab_in_season()
 
 
 def simulate_tab(season, team):
@@ -298,6 +301,82 @@ def roster_tab(team):
         if st.button("Auto-Set Rotation by Rating"):
             team._set_default_rotation()
             st.success("Rotation updated!")
+
+
+def recruiting_tab_in_season():
+    """Recruiting tab during the season"""
+    st.markdown("### Recruiting")
+
+    team = st.session_state.player_team
+    open_spots = 12 - len(team.roster)
+
+    # Initialize recruiting class if not exists
+    if st.session_state.recruiting_class is None:
+        st.session_state.recruiting_class = RecruitingClass(
+            st.session_state.current_year + 1,  # Next year's class
+            len(st.session_state.all_teams)
+        )
+
+    rc = st.session_state.recruiting_class
+
+    st.info(f"Recruiting for {st.session_state.current_year + 1} season • {open_spots} scholarships available")
+
+    # Position filter
+    position = st.selectbox("Filter by Position:", ["All", "PG", "SG", "SF", "PF", "C"], key="recruit_pos_season")
+    pos_filter = None if position == "All" else position
+
+    recruits = rc.get_available_recruits(pos_filter)[:50]
+
+    if not recruits:
+        st.warning("No recruits available.")
+        return
+
+    # Create recruit dataframe
+    recruit_data = []
+    for r in recruits:
+        recruit_data.append({
+            "Rank": f"#{r.ranking}",
+            "Name": r.name,
+            "Pos": r.position,
+            "Stars": "⭐" * r.stars,
+            "Interest": f"{r.interest}%",
+            "Potential": f"{r.potential:.1f}"
+        })
+
+    df = pd.DataFrame(recruit_data)
+    st.dataframe(df, use_container_width=True, hide_index=True, height=300)
+
+    # Recruit a player
+    recruit_names = [f"{r.name} ({r.position})" for r in recruits[:20]]
+    selected = st.selectbox("Select recruit:", [""] + recruit_names, key="recruit_select_season")
+
+    if selected:
+        idx = recruit_names.index(selected)
+        recruit = recruits[idx]
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown(f"**{recruit.name}**")
+            st.text(f"#{recruit.ranking} {recruit.position}")
+            st.text(f"{'⭐' * recruit.stars}")
+
+        with col2:
+            st.text(f"Interest: {recruit.interest}%")
+            st.progress(recruit.interest / 100)
+
+        if st.button(f"Recruit {recruit.name}", type="primary", key="recruit_btn_season"):
+            if open_spots <= 0:
+                st.error("No scholarship spots available!")
+            else:
+                success = rc.recruit_player(recruit, team)
+                if success:
+                    player = recruit.to_player()
+                    team.roster.append(player)
+                    st.success(f"✅ {recruit.name} committed!")
+                else:
+                    st.error(f"❌ {recruit.name} declined. Interest decreased.")
+                st.rerun()
 
 
 def standings_tab():

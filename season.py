@@ -18,38 +18,53 @@ class Season:
         self.game_engine = GameEngine()
         self.schedule = []
         self.current_week = 0
-        self.total_weeks = 15  # ~15 weeks of regular season
+        self.total_weeks = 18  # 18 weeks of regular season (Nov-Feb)
 
     def generate_schedule(self):
-        """Generate the season schedule organized by weeks"""
+        """Generate realistic 25-30 game schedule per team"""
         # Schedule is now a list of weeks, where each week is a list of games
         self.schedule = [[] for _ in range(self.total_weeks)]
         scheduled_matchups = set()
         all_games = []
 
-        # Generate conference games - each pair plays once
+        # Generate conference games - each team plays all conference opponents
+        # For smaller conferences, some opponents twice; larger conferences once
         for conference in CONFERENCES.keys():
             conf_teams = [t for t in self.all_teams if t.conference == conference]
+            conf_size = len(conf_teams)
 
-            # Round robin - each team plays each other once
+            # Play each conference opponent at least once
             for i, team1 in enumerate(conf_teams):
                 for team2 in conf_teams[i+1:]:
                     matchup = tuple(sorted([team1.name, team2.name]))
 
                     if matchup not in scheduled_matchups:
-                        # Randomly assign home team
+                        # Home game for one team
                         if random.random() < 0.5:
                             all_games.append((team1, team2, True))
                         else:
                             all_games.append((team2, team1, True))
                         scheduled_matchups.add(matchup)
 
-        # Generate non-conference games (fewer for balance)
+            # For smaller conferences (< 12 teams), play some opponents twice (home/away)
+            if conf_size < 12:
+                for i, team1 in enumerate(conf_teams):
+                    # Select random opponents for return games to reach ~18 conference games
+                    num_return_games = max(0, min(18 - conf_size, (conf_size - 1) // 2))
+                    if num_return_games > 0:
+                        opponents = random.sample([t for t in conf_teams if t != team1],
+                                                 min(num_return_games, len(conf_teams) - 1))
+
+                        for team2 in opponents:
+                            # Add return game (opposite home/away from first game)
+                            all_games.append((team1, team2, True))
+
+        # Generate non-conference games - 8-10 games per team
         for team in self.all_teams:
             other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
-            # Each team plays 5-8 non-conference games
-            num_non_conf = min(random.randint(5, 8), len(other_conf_teams))
+            # Each team plays 8-10 non-conference games
+            num_non_conf = min(random.randint(8, 10), len(other_conf_teams))
             opponents = random.sample(other_conf_teams, num_non_conf)
 
             for opponent in opponents:
@@ -62,21 +77,21 @@ class Season:
                         all_games.append((opponent, team, False))
                     scheduled_matchups.add(matchup)
 
-        # Distribute games across weeks, ensuring no team plays multiple times per week
+        # Distribute games across weeks - teams can play 2 games per week (realistic)
         random.shuffle(all_games)
 
         for game in all_games:
             home_team, away_team, is_conf = game
 
-            # Find the earliest week where both teams can play
+            # Find the earliest week where both teams haven't played too much
             for week_idx in range(self.total_weeks):
-                week_teams = set()
+                week_teams = {}
                 for g in self.schedule[week_idx]:
-                    week_teams.add(g[0].name)
-                    week_teams.add(g[1].name)
+                    week_teams[g[0].name] = week_teams.get(g[0].name, 0) + 1
+                    week_teams[g[1].name] = week_teams.get(g[1].name, 0) + 1
 
-                # Check if both teams are available this week
-                if home_team.name not in week_teams and away_team.name not in week_teams:
+                # Each team can play up to 2 games per week
+                if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
                     self.schedule[week_idx].append(game)
                     break
 
