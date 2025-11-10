@@ -624,11 +624,8 @@ def recruiting_page():
             st.session_state.current_year + 1,
             len(st.session_state.all_teams)
         )
-        # Initialize team fit and starting interest for all recruits
-        for recruit in st.session_state.recruiting_class.recruits:
-            team_fit = recruit.calculate_team_fit(team)
-            # Adjust starting interest based on team fit
-            recruit.interest = 50 + (team_fit / 4)  # 50-75 starting interest
+        # Initialize realistic team interests for all recruits across all teams
+        st.session_state.recruiting_class.initialize_team_interests(st.session_state.all_teams)
 
     # Initialize recruiting actions per week (resets each week)
     if not hasattr(st.session_state, 'recruiting_actions_remaining'):
@@ -653,11 +650,12 @@ def recruiting_page():
     view = st.radio("", ["Recommended", "Search All"], horizontal=True)
 
     if view == "Recommended":
-        # Show recruits with high interest (50+)
-        recruits = [r for r in rc.get_available_recruits() if r.interest >= 50]
-        recruits.sort(key=lambda r: r.interest, reverse=True)
+        # Show recruits that are aware of your team
+        recruits = [r for r in rc.get_available_recruits() if team.name in r.team_interests]
+        # Sort by your team's interest level
+        recruits.sort(key=lambda r: r.team_interests.get(team.name, 0), reverse=True)
         recruits = recruits[:50]
-        st.caption("Showing top 50 recruits with 50+ interest")
+        st.caption(f"Showing top 50 recruits aware of {team.name}")
     else:
         # Show all recruits with filters
         col1, col2, col3 = st.columns(3)
@@ -700,6 +698,10 @@ def recruiting_page():
     # Recruit list
     recruit_data = []
     for r in recruits:
+        # Show team-specific interest if known, otherwise "Unknown"
+        team_interest = r.team_interests.get(team.name, None)
+        interest_display = f"{int(team_interest)}%" if team_interest is not None else "Unknown"
+
         recruit_data.append({
             "Rank": f"#{r.ranking}",
             "Name": r.name,
@@ -709,7 +711,7 @@ def recruiting_page():
             "Offense": r.get_offense_rating(),
             "Defense": r.get_defense_rating(),
             "Fundamentals": r.get_fundamentals_rating(),
-            "Interest": f"{int(r.interest)}%"
+            "Interest": interest_display
         })
 
     df = pd.DataFrame(recruit_data)
@@ -747,9 +749,13 @@ def recruiting_page():
 
         with col3:
             st.markdown("### Interest")
-            team_interest = recruit.team_interests.get(team.name, 50)
-            st.progress(team_interest / 100)
-            st.text(f"{int(team_interest)}%")
+            team_interest = recruit.team_interests.get(team.name, None)
+            if team_interest is not None:
+                st.progress(team_interest / 100)
+                st.text(f"{int(team_interest)}%")
+            else:
+                st.text("Unknown")
+                st.caption("Scout to reveal interest")
 
         st.markdown("---")
 
@@ -788,7 +794,8 @@ def recruiting_page():
                     success = recruit.scout_action(team)
                     if success:
                         st.session_state.recruiting_actions_remaining -= 1
-                        st.success(f"Scouted {recruit.name} (Interest: {int(recruit.team_interests.get(team.name, 50))}%)")
+                        interest = int(recruit.team_interests.get(team.name, 0))
+                        st.success(f"Scouted {recruit.name} (Interest: {interest}%)")
                     else:
                         st.warning(f"Already scouted {recruit.name}")
                     st.rerun()
@@ -797,11 +804,12 @@ def recruiting_page():
             if st.button("✈️ VISIT", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0):
                 recruit.visit_action(team)
                 st.session_state.recruiting_actions_remaining -= 1
-                st.success(f"Visited {recruit.name} (Interest: {int(recruit.team_interests.get(team.name, 50))}%)")
+                interest = int(recruit.team_interests.get(team.name, 0))
+                st.success(f"Visited {recruit.name} (Interest: {interest}%)")
                 st.rerun()
 
         with col3:
-            if recruit.scholarship_offered:
+            if recruit.scholarship_offered and team.name in recruit.offers_from:
                 st.button("✅ OFFERED", use_container_width=True, disabled=True)
             else:
                 if st.button("📜 OFFER", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0 or available_spots <= 0):
@@ -820,13 +828,15 @@ def recruiting_page():
                     player = recruit.to_player()
                     team.roster.append(player)
                 else:
-                    st.error(f"❌ {recruit.name} is not ready to commit yet (Interest: {int(recruit.team_interests.get(team.name, 50))}%)")
+                    interest = int(recruit.team_interests.get(team.name, 0))
+                    st.error(f"❌ {recruit.name} is not ready to commit yet (Interest: {interest}%)")
                 st.rerun()
         elif recruit.scholarship_offered:
             if not (is_early_period or is_regular_period):
                 st.caption(f"Wait for signing period to attempt commitment")
             else:
-                st.caption(f"Need higher interest to commit (currently {int(recruit.team_interests.get(team.name, 50))}%)")
+                interest = int(recruit.team_interests.get(team.name, 0))
+                st.caption(f"Need higher interest to commit (currently {interest}%)")
 
         # Show recruiting history
         st.caption(f"Scouted: {'Yes' if team.name in recruit.scouted_by else 'No'} • Visited: {len([v for v in recruit.visited_by if v == team.name])}x • Offered: {'Yes' if team.name in recruit.offers_from else 'No'}")

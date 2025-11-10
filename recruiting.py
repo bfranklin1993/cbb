@@ -534,23 +534,114 @@ class RecruitingClass:
             if recruit.committed:
                 continue
 
-            # Small random fluctuation (-2 to +2)
-            base_change = random.uniform(-2, 2)
+            # Update all team interests
+            for team_name in list(recruit.team_interests.keys()):
+                interest = recruit.team_interests[team_name]
 
-            # Slight decay if interest is very high (keeps things realistic)
-            # Players at 90+ interest will slowly drift down unless actively recruited
-            if recruit.interest > 90:
-                decay = random.uniform(-1, -0.5)
-            elif recruit.interest > 80:
-                decay = random.uniform(-0.5, 0)
+                # Small random fluctuation (-2 to +2)
+                base_change = random.uniform(-2, 2)
+
+                # Slight decay if interest is very high (keeps things realistic)
+                # Players at 90+ interest will slowly drift down unless actively recruited
+                if interest > 90:
+                    decay = random.uniform(-1, -0.5)
+                elif interest > 80:
+                    decay = random.uniform(-0.5, 0)
+                else:
+                    decay = 0
+
+                # Apply changes
+                interest_change = base_change + decay
+
+                # Update interest with bounds (keep between 15 and 100)
+                recruit.team_interests[team_name] = max(15, min(100, interest + interest_change))
+
+            # Update general interest to current team's interest if it exists
+            if recruit.team_interests:
+                recruit.interest = max(recruit.team_interests.values())
+
+    def initialize_team_interests(self, all_teams: List[Team]):
+        """Initialize realistic interest levels for all teams
+
+        Creates varied, realistic interest distributions based on:
+        - Team prestige (better teams get higher baseline)
+        - Team fit with recruit
+        - Randomness to create variety
+        """
+        for recruit in self.recruits:
+            # Reset team interests
+            recruit.team_interests = {}
+
+            # Determine how many teams this recruit is initially aware of
+            # Top recruits know more teams, lower recruits know fewer
+            if recruit.stars == 5:
+                num_aware = random.randint(15, 25)  # Top recruits know lots of schools
+            elif recruit.stars == 4:
+                num_aware = random.randint(10, 20)
+            elif recruit.stars == 3:
+                num_aware = random.randint(8, 15)
             else:
-                decay = 0
+                num_aware = random.randint(5, 10)
 
-            # Apply changes
-            interest_change = base_change + decay
+            # Select random teams to be aware of, weighted by prestige
+            prestige_weights = {
+                "ELITE": 10,
+                "HIGH": 7,
+                "UPPER_MID": 5,
+                "MID": 3,
+                "LOW_MID": 2,
+                "LOW": 1
+            }
 
-            # Update interest with bounds (keep between 20 and 100)
-            recruit.interest = max(20, min(100, recruit.interest + interest_change))
+            # Create weighted list
+            weighted_teams = []
+            for team in all_teams:
+                weight = prestige_weights.get(team.prestige, 1)
+                weighted_teams.extend([team] * weight)
+
+            # Select teams
+            aware_teams = random.sample(weighted_teams, min(num_aware, len(weighted_teams)))
+
+            # Remove duplicates while preserving some
+            aware_teams = list({team.name: team for team in aware_teams}.values())
+
+            # Set initial interest for each team the recruit is aware of
+            for team in aware_teams:
+                team_fit = recruit.calculate_team_fit(team)
+
+                # Base interest varies by prestige
+                if team.prestige == "ELITE":
+                    base = random.uniform(40, 60)  # Elite teams start higher
+                elif team.prestige == "HIGH":
+                    base = random.uniform(30, 50)
+                elif team.prestige == "UPPER_MID":
+                    base = random.uniform(25, 45)
+                elif team.prestige == "MID":
+                    base = random.uniform(20, 40)
+                elif team.prestige == "LOW_MID":
+                    base = random.uniform(15, 35)
+                else:  # LOW
+                    base = random.uniform(10, 30)
+
+                # Adjust for team fit (can add or subtract up to 15)
+                fit_adjustment = (team_fit - 60) / 3  # -20 to +13
+
+                # Add some randomness
+                random_factor = random.uniform(-8, 8)
+
+                # Calculate final interest
+                initial_interest = base + fit_adjustment + random_factor
+
+                # Bound between 10 and 70 (no one starts super high)
+                initial_interest = max(10, min(70, initial_interest))
+
+                recruit.team_interests[team.name] = initial_interest
+
+            # Set general interest to the highest team interest
+            if recruit.team_interests:
+                recruit.interest = max(recruit.team_interests.values())
+            else:
+                recruit.interest = 50
 
     def recruit_player(self, recruit: Recruit, team: Team) -> bool:
         """
