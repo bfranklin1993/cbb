@@ -172,6 +172,42 @@ class Recruit:
         return (self.shooting + self.defense + self.athleticism +
                 self.basketball_iq + self.rebounding) / 5
 
+    def _calculate_realistic_initial_interest(self, team: Team) -> float:
+        """Calculate realistic initial interest for a team
+
+        This is used when a team first contacts a recruit who wasn't previously aware of them.
+        Uses same logic as initialize_team_interests to ensure consistency.
+        """
+        team_fit = self.calculate_team_fit(team)
+
+        # Base interest varies by prestige
+        if team.prestige == "ELITE":
+            base = random.uniform(40, 60)
+        elif team.prestige == "HIGH":
+            base = random.uniform(30, 50)
+        elif team.prestige == "UPPER_MID":
+            base = random.uniform(25, 45)
+        elif team.prestige == "MID":
+            base = random.uniform(20, 40)
+        elif team.prestige == "LOW_MID":
+            base = random.uniform(15, 35)
+        else:  # LOW
+            base = random.uniform(10, 30)
+
+        # Adjust for team fit (can add or subtract up to 15)
+        fit_adjustment = (team_fit - 60) / 3  # -20 to +13
+
+        # Add some randomness
+        random_factor = random.uniform(-8, 8)
+
+        # Calculate final interest
+        initial_interest = base + fit_adjustment + random_factor
+
+        # Bound between 10 and 70 (no one starts super high)
+        initial_interest = max(10, min(70, initial_interest))
+
+        return initial_interest
+
     def calculate_team_fit(self, team: Team) -> float:
         """
         Calculate how well this recruit fits with the team (0-100)
@@ -237,10 +273,10 @@ class Recruit:
         self.times_scouted += 1
         self.scouted_by.add(team.name)
 
-        # Initialize team interest if not exists
+        # Initialize team interest if not exists (recruit wasn't aware of this team)
         if team.name not in self.team_interests:
-            team_fit = self.calculate_team_fit(team)
-            self.team_interests[team.name] = 50 + (team_fit / 4)
+            # Use realistic calculation based on prestige, not hardcoded high value
+            self.team_interests[team.name] = self._calculate_realistic_initial_interest(team)
 
         # Minimal interest boost - scouting is mainly for info gathering
         team_fit = self.calculate_team_fit(team)
@@ -257,10 +293,10 @@ class Recruit:
         self.times_visited += 1
         self.visited_by.add(team.name)
 
-        # Initialize team interest if not exists
+        # Initialize team interest if not exists (recruit wasn't aware of this team)
         if team.name not in self.team_interests:
-            team_fit = self.calculate_team_fit(team)
-            self.team_interests[team.name] = 50 + (team_fit / 4)
+            # Use realistic calculation based on prestige, not hardcoded high value
+            self.team_interests[team.name] = self._calculate_realistic_initial_interest(team)
 
         # Bigger interest boost based on team fit - reduced from original
         team_fit = self.calculate_team_fit(team)
@@ -277,10 +313,10 @@ class Recruit:
         self.scholarship_offered = True
         self.offers_from.add(team.name)
 
-        # Initialize team interest if not exists
+        # Initialize team interest if not exists (recruit wasn't aware of this team)
         if team.name not in self.team_interests:
-            team_fit = self.calculate_team_fit(team)
-            self.team_interests[team.name] = 50 + (team_fit / 4)
+            # Use realistic calculation based on prestige, not hardcoded high value
+            self.team_interests[team.name] = self._calculate_realistic_initial_interest(team)
 
         # Interest boost for being offered - reduced from original
         team_fit = self.calculate_team_fit(team)

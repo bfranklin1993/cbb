@@ -155,7 +155,6 @@ def main():
 
 def select_team_page():
     """Team selection"""
-    st.markdown('<div class="main-title">🏀 CBB MANAGER</div>', unsafe_allow_html=True)
     st.markdown("## SELECT YOUR TEAM")
     st.caption("Choose a school to begin your coaching career")
 
@@ -270,6 +269,51 @@ def dashboard_page():
             st.metric("STATUS", "PRE-SEASON")
 
     st.markdown("---")
+
+    # Weekly Tasks Section
+    if season and season.current_week < season.total_weeks:
+        st.markdown("### 📋 WEEKLY TASKS")
+
+        tasks = []
+        current_week = season.current_week
+
+        # Recruiting tasks
+        recruiting_actions = getattr(st.session_state, 'recruiting_actions_remaining', 5)
+        if recruiting_actions > 0:
+            tasks.append(f"✅ Use {recruiting_actions} recruiting action(s)")
+        else:
+            tasks.append(f"✓ Recruiting actions complete (0/5 remaining)")
+
+        # Check recruiting class status
+        if st.session_state.recruiting_class:
+            rc = st.session_state.recruiting_class
+            commits = [r for r in rc.recruits if r.committed and r.committed_to == team.name]
+            graduating = sum(1 for p in team.roster if p.year >= 4)
+            remaining_spots = graduating - len(commits)
+
+            if remaining_spots > 0:
+                tasks.append(f"🎓 Fill {remaining_spots} scholarship spot(s) ({len(commits)}/{graduating} committed)")
+            else:
+                tasks.append(f"✓ Recruiting class full ({len(commits)}/{graduating})")
+
+        # Check if in signing period
+        is_early_period = 4 <= current_week <= 6
+        is_regular_period = current_week >= 16
+
+        if is_early_period:
+            tasks.append("📝 EARLY SIGNING PERIOD - Recruits can commit!")
+        elif current_week == 3:
+            tasks.append("⏰ Early signing period starts next week")
+        elif is_regular_period:
+            tasks.append("📝 REGULAR SIGNING PERIOD - Recruits can commit!")
+        elif current_week == 15:
+            tasks.append("⏰ Regular signing period starts next week")
+
+        # Display tasks
+        for task in tasks:
+            st.text(task)
+
+        st.markdown("---")
 
     # Season controls
     if not season:
@@ -650,12 +694,44 @@ def recruiting_page():
     view = st.radio("", ["Recommended", "Search All"], horizontal=True)
 
     if view == "Recommended":
-        # Show recruits that are aware of your team
-        recruits = [r for r in rc.get_available_recruits() if team.name in r.team_interests]
-        # Sort by your team's interest level
-        recruits.sort(key=lambda r: r.team_interests.get(team.name, 0), reverse=True)
+        # Show realistic recruiting targets based on team prestige and recruit quality
+        all_recruits = rc.get_available_recruits()
+
+        # Filter by realistic targets based on prestige
+        recruits = []
+        for r in all_recruits:
+            is_realistic = False
+
+            if r.stars == 5 or r.ranking <= 20:
+                # 5-star: Only ELITE/HIGH prestige teams
+                if team.prestige in ["ELITE", "HIGH"]:
+                    is_realistic = True
+            elif r.stars == 4 or r.ranking <= 100:
+                # 4-star: ELITE/HIGH/UPPER_MID teams
+                if team.prestige in ["ELITE", "HIGH", "UPPER_MID"]:
+                    is_realistic = True
+            elif r.stars == 3:
+                # 3-star: All teams can realistically recruit
+                is_realistic = True
+            else:
+                # 2-star: Lower prestige teams should target these
+                if team.prestige in ["MID", "LOW_MID", "LOW"]:
+                    is_realistic = True
+                elif team.prestige in ["UPPER_MID"] and len([x for x in all_recruits if x.stars >= 3]) < 20:
+                    is_realistic = True  # If few 3+ stars available
+
+            if is_realistic:
+                recruits.append(r)
+
+        # Sort by: 1) If aware of you (and interest level), 2) Star rating, 3) Ranking
+        def sort_key(r):
+            aware = team.name in r.team_interests
+            interest = r.team_interests.get(team.name, 0) if aware else 0
+            return (aware, interest, -r.stars, r.ranking)
+
+        recruits.sort(key=sort_key, reverse=True)
         recruits = recruits[:50]
-        st.caption(f"Showing top 50 recruits aware of {team.name}")
+        st.caption(f"Showing realistic recruiting targets for {team.prestige} prestige team")
     else:
         # Show all recruits with filters
         col1, col2, col3 = st.columns(3)
