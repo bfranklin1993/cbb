@@ -35,6 +35,12 @@ class Recruit:
         self.times_visited = 0
         self.scholarship_offered = False
 
+        # Track which teams are recruiting this player
+        self.team_interests = {}  # {team_name: interest_level}
+        self.scouted_by = set()  # Teams that have scouted this player
+        self.visited_by = set()  # Teams that have visited this player
+        self.offers_from = set()  # Teams that have offered scholarship
+
         # Recruit preferences (what they value most) - each recruit has 2-3 priorities
         self.preferences = self._generate_preferences()
 
@@ -223,90 +229,167 @@ class Recruit:
         return min(100, (fit_score / max_score) * 100) if max_score > 0 else 50
 
     def scout_action(self, team: Team):
-        """Scout a player - increases interest slightly, reveals more info"""
+        """Scout a player - increases interest slightly, reveals more info
+        Can only scout a player once per team"""
+        if team.name in self.scouted_by:
+            return False  # Already scouted by this team
+
         self.times_scouted += 1
+        self.scouted_by.add(team.name)
+
+        # Initialize team interest if not exists
+        if team.name not in self.team_interests:
+            team_fit = self.calculate_team_fit(team)
+            self.team_interests[team.name] = 50 + (team_fit / 4)
 
         # Minimal interest boost - scouting is mainly for info gathering
         team_fit = self.calculate_team_fit(team)
         base_boost = random.uniform(0.5, 1.0)  # 0.5-1 base
         fit_bonus = team_fit / 200  # 0-0.5 based on fit
         interest_boost = base_boost + fit_bonus  # Total: 0.5-1.5 points
-        self.interest = min(100, self.interest + interest_boost)
+
+        self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
+        self.interest = self.team_interests[team.name]  # Update current interest
+        return True
 
     def visit_action(self, team: Team):
         """Visit a player - significant interest boost"""
         self.times_visited += 1
+        self.visited_by.add(team.name)
+
+        # Initialize team interest if not exists
+        if team.name not in self.team_interests:
+            team_fit = self.calculate_team_fit(team)
+            self.team_interests[team.name] = 50 + (team_fit / 4)
 
         # Bigger interest boost based on team fit - reduced from original
         team_fit = self.calculate_team_fit(team)
         base_boost = random.uniform(3, 6)  # 3-6 base
         fit_bonus = team_fit / 20  # 0-5 based on fit
         interest_boost = base_boost + fit_bonus  # Total: 3-11 points
-        self.interest = min(100, self.interest + interest_boost)
+
+        self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
+        self.interest = self.team_interests[team.name]  # Update current interest
+        return True
 
     def offer_scholarship(self, team: Team):
         """Offer scholarship - required before player can commit"""
         self.scholarship_offered = True
+        self.offers_from.add(team.name)
+
+        # Initialize team interest if not exists
+        if team.name not in self.team_interests:
+            team_fit = self.calculate_team_fit(team)
+            self.team_interests[team.name] = 50 + (team_fit / 4)
 
         # Interest boost for being offered - reduced from original
         team_fit = self.calculate_team_fit(team)
         base_boost = random.uniform(2, 5)  # 2-5 base
         fit_bonus = team_fit / 25  # 0-4 based on fit
         interest_boost = base_boost + fit_bonus  # Total: 2-9 points
-        self.interest = min(100, self.interest + interest_boost)
 
-    def can_commit(self, team: Team) -> bool:
-        """Check if recruit can commit (needs scholarship offer + high enough interest)"""
+        self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
+        self.interest = self.team_interests[team.name]  # Update current interest
+        return True
+
+    def get_top_schools(self, limit: int = 5) -> List[tuple]:
+        """Get the recruit's top schools by interest level
+        Returns list of (team_name, interest_level) tuples"""
+        sorted_interests = sorted(
+            self.team_interests.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )
+        return sorted_interests[:limit]
+
+    def can_commit(self, team: Team, current_week: int = 0) -> bool:
+        """Check if recruit can commit (needs scholarship offer + high enough interest + right time period)"""
         if not self.scholarship_offered:
             return False
 
         if self.committed:
             return False
 
-        # Elite recruits (5-star, top 100) have higher standards
+        # Time-based recruiting periods
+        # Early signing period: Weeks 4-6 (mid-November)
+        # Regular signing period: Weeks 16+ (March-April)
+        is_early_period = 4 <= current_week <= 6
+        is_regular_period = current_week >= 16
+
+        if not (is_early_period or is_regular_period):
+            return False  # Can't commit outside signing periods
+
+        # Elite recruits (5-star, top 100) have MUCH higher standards
         team_fit = self.calculate_team_fit(team)
 
-        # Base required interest varies by recruit quality
+        # Get team interest (not general interest)
+        team_interest = self.team_interests.get(team.name, 50)
+
+        # Base required interest varies by recruit quality - MUCH HIGHER NOW
         if self.stars == 5 or self.ranking <= 20:  # Top 20 recruits
-            base_required = 90
+            base_required = 95  # Need near-perfect interest
+            # Must be top 2 in their list
+            top_schools = self.get_top_schools(2)
+            if not any(school[0] == team.name for school in top_schools):
+                return False
         elif self.stars == 4 or self.ranking <= 100:  # Top 100 recruits
-            base_required = 85
+            base_required = 92  # Very high interest needed
+            # Must be top 3 in their list
+            top_schools = self.get_top_schools(3)
+            if not any(school[0] == team.name for school in top_schools):
+                return False
         elif self.stars == 3 or self.ranking <= 300:  # Top 300 recruits
-            base_required = 75
+            base_required = 85
         else:
-            base_required = 65
+            base_required = 75
 
-        # Reduce required interest based on team fit (max -20)
-        required_interest = max(70, base_required - (team_fit / 5))
+        # Reduce required interest based on team fit (max -10, reduced from -20)
+        required_interest = max(85, base_required - (team_fit / 10))
 
-        return self.interest >= required_interest
+        return team_interest >= required_interest
 
     def attempt_commit(self, team: Team) -> bool:
-        """Attempt to get recruit to commit"""
+        """Attempt to get recruit to commit - MUCH HARDER NOW"""
         if not self.can_commit(team):
             return False
 
         # Success chance - not guaranteed even at high interest
-        # Elite recruits are pickier
+        # Elite recruits are VERY picky
         team_fit = self.calculate_team_fit(team)
+        team_interest = self.team_interests.get(team.name, 50)
 
-        if self.stars == 5 or self.ranking <= 20:  # Top tier
-            # Need ELITE prestige or very high fit to have good chance
-            if team.prestige in ["ELITE", "HIGH"]:
+        # Check if team is #1 choice
+        top_schools = self.get_top_schools(5)
+        team_rank = next((i for i, (name, _) in enumerate(top_schools, 1) if name == team.name), 999)
+
+        if self.stars == 5 or self.ranking <= 20:  # Top tier - EXTREMELY HARD
+            # Need ELITE prestige AND be #1 choice for decent chance
+            if team.prestige in ["ELITE"] and team_rank == 1:
+                base_chance = 60
+            elif team.prestige in ["ELITE"] and team_rank <= 2:
+                base_chance = 40
+            elif team.prestige in ["HIGH"] and team_rank == 1:
+                base_chance = 50
+            else:
+                base_chance = 15  # Very low chance otherwise
+        elif self.stars == 4 or self.ranking <= 100:  # 4-stars - VERY HARD
+            if team.prestige in ["ELITE", "HIGH"] and team_rank <= 2:
+                base_chance = 65
+            elif team.prestige in ["ELITE", "HIGH", "UPPER_MID"] and team_rank <= 3:
+                base_chance = 50
+            else:
+                base_chance = 30
+        elif self.stars == 3 or self.ranking <= 300:  # 3-stars - HARD
+            if team_rank <= 3:
                 base_chance = 70
             else:
-                base_chance = 30  # Low prestige schools struggle with top recruits
-        elif self.stars == 4 or self.ranking <= 100:
-            if team.prestige in ["ELITE", "HIGH", "UPPER_MID"]:
-                base_chance = 75
-            else:
                 base_chance = 45
-        else:
-            base_chance = 80
+        else:  # 2-stars - MODERATE
+            base_chance = 75
 
-        # Add interest bonus (max +20)
-        interest_bonus = (self.interest - 70) / 2  # 0-15 bonus
-        success_chance = min(95, base_chance + interest_bonus + (team_fit / 10))
+        # Add small interest bonus (max +10, reduced from +20)
+        interest_bonus = (team_interest - 85) / 3  # 0-5 bonus
+        success_chance = min(90, base_chance + interest_bonus + (team_fit / 15))
 
         if random.uniform(0, 100) < success_chance:
             self.committed = True
@@ -314,7 +397,9 @@ class Recruit:
             return True
 
         # Failed - interest decrease
-        self.interest = max(0, self.interest - random.randint(5, 12))
+        if team.name in self.team_interests:
+            self.team_interests[team.name] = max(30, self.team_interests[team.name] - random.randint(8, 15))
+            self.interest = self.team_interests[team.name]
         return False
 
     def to_player(self) -> Player:

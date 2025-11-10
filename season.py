@@ -281,22 +281,34 @@ class Season:
         return None
 
     def simulate_to_next_game(self, team: Team) -> dict:
-        """Simulate games until the specified team's next game, then simulate that game and return result"""
+        """Simulate ONLY the specified team's next game (not all games in the week)"""
         next_game = self.get_next_game_for_team(team)
         if not next_game:
             return None
 
         target_week = next_game['week']
-        results = []
 
-        # Simulate weeks up to and including the target week
-        while self.current_week <= target_week:
-            week_results = self.simulate_week()
-            results.extend(week_results)
+        # Simulate all weeks before the target week
+        while self.current_week < target_week:
+            self.simulate_week()
 
-        # Find and return the result for the team's game
-        for result in results:
-            if result['home_team'] == team.name or result['away_team'] == team.name:
+        # Now simulate ONLY the target game in the target week
+        week_games = self.schedule[target_week]
+
+        for game_tuple in week_games:
+            # Handle both old (3-tuple) and new (4-tuple with day_offset) formats
+            if len(game_tuple) >= 4:
+                home_team, away_team, is_conference, day_offset = game_tuple[:4]
+            else:
+                home_team, away_team, is_conference = game_tuple
+                day_offset = 0
+
+            # Check if this is the team's game
+            if home_team.name == team.name or away_team.name == team.name:
+                # Simulate only this game
+                result = self.game_engine.simulate_game_with_details(
+                    home_team, away_team, is_conference
+                )
                 return result
 
         return None

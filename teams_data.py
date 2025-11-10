@@ -4,6 +4,108 @@ Real college basketball teams organized by conference
 
 from models import Team
 
+# Team nicknames mapping
+TEAM_NICKNAMES = {
+    # ACC
+    "Duke": "Blue Devils", "North Carolina": "Tar Heels", "Virginia": "Cavaliers",
+    "Miami": "Hurricanes", "Clemson": "Tigers", "Florida State": "Seminoles",
+    "NC State": "Wolfpack", "Syracuse": "Orange", "Pittsburgh": "Panthers",
+    "Louisville": "Cardinals", "Virginia Tech": "Hokies", "Georgia Tech": "Yellow Jackets",
+    "Wake Forest": "Demon Deacons", "Boston College": "Eagles", "Notre Dame": "Fighting Irish",
+    "California": "Golden Bears", "Stanford": "Cardinal", "SMU": "Mustangs",
+
+    # Big Ten
+    "Michigan State": "Spartans", "Michigan": "Wolverines", "Illinois": "Fighting Illini",
+    "Purdue": "Boilermakers", "Wisconsin": "Badgers", "Ohio State": "Buckeyes",
+    "Indiana": "Hoosiers", "Iowa": "Hawkeyes", "Maryland": "Terrapins",
+    "Penn State": "Nittany Lions", "Rutgers": "Scarlet Knights", "Minnesota": "Golden Gophers",
+    "Northwestern": "Wildcats", "Nebraska": "Cornhuskers", "USC": "Trojans",
+    "UCLA": "Bruins", "Oregon": "Ducks", "Washington": "Huskies",
+
+    # Big 12
+    "Kansas": "Jayhawks", "Baylor": "Bears", "Texas Tech": "Red Raiders",
+    "Texas": "Longhorns", "Oklahoma State": "Cowboys", "West Virginia": "Mountaineers",
+    "TCU": "Horned Frogs", "Kansas State": "Wildcats", "Iowa State": "Cyclones",
+    "Cincinnati": "Bearcats", "Houston": "Cougars", "UCF": "Knights",
+    "BYU": "Cougars", "Arizona": "Wildcats", "Arizona State": "Sun Devils",
+    "Colorado": "Buffaloes", "Utah": "Utes",
+
+    # SEC
+    "Kentucky": "Wildcats", "Tennessee": "Volunteers", "Auburn": "Tigers",
+    "Alabama": "Crimson Tide", "Arkansas": "Razorbacks", "Florida": "Gators",
+    "LSU": "Tigers", "Mississippi State": "Bulldogs", "Ole Miss": "Rebels",
+    "Texas A&M": "Aggies", "Missouri": "Tigers", "South Carolina": "Gamecocks",
+    "Georgia": "Bulldogs", "Vanderbilt": "Commodores", "Oklahoma": "Sooners",
+
+    # Big East
+    "Villanova": "Wildcats", "UConn": "Huskies", "Creighton": "Bluejays",
+    "Xavier": "Musketeers", "Marquette": "Golden Eagles", "Providence": "Friars",
+    "Butler": "Bulldogs", "Seton Hall": "Pirates", "St. John's": "Red Storm",
+    "Georgetown": "Hoyas", "DePaul": "Blue Demons",
+
+    # American
+    "Memphis": "Tigers", "Temple": "Owls", "Wichita State": "Shockers",
+    "Tulsa": "Golden Hurricane", "Tulane": "Green Wave", "East Carolina": "Pirates",
+    "USF": "Bulls", "UAB": "Blazers", "North Texas": "Mean Green",
+    "UTSA": "Roadrunners", "Rice": "Owls", "Charlotte": "49ers",
+    "Florida Atlantic": "Owls", "Army": "Black Knights",
+
+    # Mountain West
+    "San Diego State": "Aztecs", "Nevada": "Wolf Pack", "New Mexico": "Lobos",
+    "Utah State": "Aggies", "Boise State": "Broncos", "Colorado State": "Rams",
+    "Wyoming": "Cowboys", "UNLV": "Rebels", "Fresno State": "Bulldogs",
+    "Air Force": "Falcons", "San Jose State": "Spartans", "Hawaii": "Rainbow Warriors",
+
+    # Atlantic 10
+    "VCU": "Rams", "Dayton": "Flyers", "Richmond": "Spiders",
+    "St. Louis": "Billikens", "Davidson": "Wildcats", "Rhode Island": "Rams",
+    "Saint Joseph's": "Hawks", "George Mason": "Patriots", "UMass": "Minutemen",
+    "Fordham": "Rams", "La Salle": "Explorers", "Duquesne": "Dukes",
+    "Saint Louis": "Billikens", "Loyola Chicago": "Ramblers", "George Washington": "Colonials",
+
+    # WCC
+    "Gonzaga": "Bulldogs", "Saint Mary's": "Gaels", "San Francisco": "Dons",
+    "Santa Clara": "Broncos", "Loyola Marymount": "Lions", "Pepperdine": "Waves",
+    "Pacific": "Tigers", "Portland": "Pilots", "San Diego": "Toreros",
+
+    # Conference USA
+    "Louisiana Tech": "Bulldogs", "UTEP": "Miners", "Middle Tennessee": "Blue Raiders",
+    "Western Kentucky": "Hilltoppers", "Jacksonville State": "Gamecocks", "Liberty": "Flames",
+    "New Mexico State": "Aggies", "Sam Houston State": "Bearkats", "FIU": "Panthers",
+    "Kennesaw State": "Owls",
+
+    # MAC
+    "Toledo": "Rockets", "Akron": "Zips", "Kent State": "Golden Flashes",
+    "Ohio": "Bobcats", "Buffalo": "Bulls", "Bowling Green": "Falcons",
+    "Miami (OH)": "RedHawks", "Ball State": "Cardinals", "Central Michigan": "Chippewas",
+    "Eastern Michigan": "Eagles", "Western Michigan": "Broncos", "Northern Illinois": "Huskies",
+
+    # Sun Belt
+    "Louisiana": "Ragin' Cajuns", "Texas State": "Bobcats", "Arkansas State": "Red Wolves",
+    "Troy": "Trojans", "South Alabama": "Jaguars", "Georgia State": "Panthers",
+    "Georgia Southern": "Eagles", "Coastal Carolina": "Chanticleers", "App State": "Mountaineers",
+    "UL Monroe": "Warhawks", "Old Dominion": "Monarchs", "James Madison": "Dukes",
+    "Marshall": "Thundering Herd", "Southern Miss": "Golden Eagles",
+
+    # Missouri Valley
+    "Drake": "Bulldogs", "Bradley": "Braves", "Northern Iowa": "Panthers",
+    "Missouri State": "Bears", "Indiana State": "Sycamores", "Southern Illinois": "Salukis",
+    "Illinois State": "Redbirds", "Belmont": "Bruins", "UIC": "Flames",
+    "Valparaiso": "Beacons", "Murray State": "Racers",
+
+    # Ivy League
+    "Princeton": "Tigers", "Yale": "Bulldogs", "Harvard": "Crimson",
+    "Penn": "Quakers", "Cornell": "Big Red", "Columbia": "Lions",
+    "Brown": "Bears", "Dartmouth": "Big Green",
+
+    # Colonial
+    "Charleston": "Cougars", "Hofstra": "Pride", "Delaware": "Blue Hens",
+    "Drexel": "Dragons", "Towson": "Tigers", "UNC Wilmington": "Seahawks",
+    "Northeastern": "Huskies", "William & Mary": "Tribe", "Elon": "Phoenix",
+    "Hampton": "Pirates", "Monmouth": "Hawks", "Stony Brook": "Seawolves",
+    "Campbell": "Fighting Camels",
+}
+
 # All D1 conferences and their teams (~360 teams total)
 CONFERENCES = {
     # Power Conferences

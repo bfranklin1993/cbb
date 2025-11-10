@@ -6,7 +6,7 @@ Dark mode, minimal navigation, action-focused
 import streamlit as st
 import pandas as pd
 from models import Team
-from teams_data import create_all_teams, get_team_by_name, CONFERENCES
+from teams_data import create_all_teams, get_team_by_name, CONFERENCES, TEAM_NICKNAMES
 from season import Season
 from tournament import run_postseason
 from game_engine import GameEngine
@@ -245,19 +245,15 @@ def dashboard_page():
     rank_display = f"#{team_rank} " if team_rank and team_rank <= 25 else ""
 
     # Header
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.markdown(f"## {rank_display}{team.name}")
-        if season:
-            current_date = season.week_to_date(season.current_week)
-            st.caption(f"{team.conference} • {current_date}, 2025 • Week {season.current_week + 1}/{season.total_weeks}")
-        else:
-            st.caption(f"{team.conference} • {st.session_state.current_year} Season")
-    with col2:
-        if st.button("⚙️ Change Team"):
-            st.session_state.player_team = None
-            st.session_state.current_season = None
-            st.rerun()
+    nickname = TEAM_NICKNAMES.get(team.name, "")
+    team_display = f"{team.name} {nickname}" if nickname else team.name
+
+    st.markdown(f"## {rank_display}{team_display}")
+    if season:
+        current_date = season.week_to_date(season.current_week)
+        st.caption(f"{team.conference} • {current_date}, 2025 • Week {season.current_week + 1}/{season.total_weeks}")
+    else:
+        st.caption(f"{team.conference} • {st.session_state.current_year} Season")
 
     # Key metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -337,18 +333,26 @@ def dashboard_page():
                         </div>
                         """, unsafe_allow_html=True)
 
-            # Upcoming games
-            schedule = season.get_team_schedule(team)
-            upcoming = [g for g in schedule if not g['played']][:5]
+    # Always show upcoming games prominently if in season
+    if season and season.current_week < season.total_weeks:
+        st.markdown("---")
+        st.markdown("### 📅 UPCOMING GAMES")
+        schedule = season.get_team_schedule(team)
+        upcoming = [g for g in schedule if not g['played']][:8]
 
-            if upcoming:
-                st.markdown("### UPCOMING GAMES")
-                for game in upcoming:
-                    location = "vs" if game['is_home'] else "@"
-                    game_type = " (CONF)" if game['is_conference'] else ""
-                    day_offset = game.get('day_offset', 0)
-                    game_date = season.week_to_date(game['week'] - 1, day_offset)
-                    st.text(f"{game_date}: {location} {game['opponent']}{game_type}")
+        if upcoming:
+            # Show in a more visible format
+            for game in upcoming:
+                location = "vs" if game['is_home'] else "@"
+                location_icon = "🏠" if game['is_home'] else "✈️"
+                game_type = " (CONFERENCE)" if game['is_conference'] else ""
+                day_offset = game.get('day_offset', 0)
+                game_date = season.week_to_date(game['week'] - 1, day_offset)
+                opponent_nickname = TEAM_NICKNAMES.get(game['opponent'], "")
+                opponent_display = f"{game['opponent']} {opponent_nickname}" if opponent_nickname else game['opponent']
+                st.text(f"{location_icon} {game_date}: {location} {opponent_display}{game_type}")
+        else:
+            st.info("No upcoming games scheduled")
 
 
 def team_page():
@@ -743,28 +747,57 @@ def recruiting_page():
 
         with col3:
             st.markdown("### Interest")
-            st.progress(recruit.interest / 100)
-            st.text(f"{int(recruit.interest)}%")
+            team_interest = recruit.team_interests.get(team.name, 50)
+            st.progress(team_interest / 100)
+            st.text(f"{int(team_interest)}%")
 
         st.markdown("---")
+
+        # Show top schools if player has been scouted
+        if team.name in recruit.scouted_by:
+            top_schools = recruit.get_top_schools(5)
+            if top_schools:
+                st.markdown("### Top Schools")
+                for i, (school_name, interest) in enumerate(top_schools, 1):
+                    marker = "👉 " if school_name == team.name else "   "
+                    st.text(f"{marker}{i}. {school_name} ({int(interest)}%)")
+                st.markdown("---")
+
+        # Signing period indicator
+        current_week = st.session_state.current_season.current_week if st.session_state.current_season else 0
+        is_early_period = 4 <= current_week <= 6
+        is_regular_period = current_week >= 16
+        if is_early_period:
+            st.info("📝 Early Signing Period (Nov 13-20)")
+        elif is_regular_period:
+            st.info("📝 Regular Signing Period (April)")
+        else:
+            st.warning("⚠️ Not in signing period - recruits cannot commit yet")
 
         # Actions
         st.markdown("### RECRUITING ACTIONS")
 
         col1, col2, col3 = st.columns(3)
 
+        already_scouted = team.name in recruit.scouted_by
         with col1:
-            if st.button("🔍 SCOUT", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0):
-                recruit.scout_action(team)
-                st.session_state.recruiting_actions_remaining -= 1
-                st.success(f"Scouted {recruit.name} (Interest: {int(recruit.interest)}%)")
-                st.rerun()
+            if already_scouted:
+                st.button("✅ SCOUTED", use_container_width=True, disabled=True)
+            else:
+                if st.button("🔍 SCOUT", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0):
+                    success = recruit.scout_action(team)
+                    if success:
+                        st.session_state.recruiting_actions_remaining -= 1
+                        st.success(f"Scouted {recruit.name} (Interest: {int(recruit.team_interests.get(team.name, 50))}%)")
+                    else:
+                        st.warning(f"Already scouted {recruit.name}")
+                    st.rerun()
 
         with col2:
             if st.button("✈️ VISIT", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0):
                 recruit.visit_action(team)
                 st.session_state.recruiting_actions_remaining -= 1
-                st.success(f"Visited {recruit.name} (Interest: {int(recruit.interest)}%)")
+                st.success(f"Visited {recruit.name} (Interest: {int(recruit.team_interests.get(team.name, 50))}%)")
                 st.rerun()
 
         with col3:
@@ -778,7 +811,7 @@ def recruiting_page():
                     st.rerun()
 
         # Commit attempt
-        if recruit.scholarship_offered and recruit.can_commit(team):
+        if recruit.scholarship_offered and recruit.can_commit(team, current_week):
             st.markdown("---")
             if st.button(f"🎯 ATTEMPT TO CLOSE COMMITMENT", type="primary", use_container_width=True):
                 success = recruit.attempt_commit(team)
@@ -787,13 +820,16 @@ def recruiting_page():
                     player = recruit.to_player()
                     team.roster.append(player)
                 else:
-                    st.error(f"❌ {recruit.name} is not ready to commit yet (Interest: {int(recruit.interest)}%)")
+                    st.error(f"❌ {recruit.name} is not ready to commit yet (Interest: {int(recruit.team_interests.get(team.name, 50))}%)")
                 st.rerun()
         elif recruit.scholarship_offered:
-            st.caption(f"Need higher interest to commit (currently {int(recruit.interest)}%)")
+            if not (is_early_period or is_regular_period):
+                st.caption(f"Wait for signing period to attempt commitment")
+            else:
+                st.caption(f"Need higher interest to commit (currently {int(recruit.team_interests.get(team.name, 50))}%)")
 
         # Show recruiting history
-        st.caption(f"Scouted: {recruit.times_scouted}x • Visited: {recruit.times_visited}x • Offered: {'Yes' if recruit.scholarship_offered else 'No'}")
+        st.caption(f"Scouted: {'Yes' if team.name in recruit.scouted_by else 'No'} • Visited: {len([v for v in recruit.visited_by if v == team.name])}x • Offered: {'Yes' if team.name in recruit.offers_from else 'No'}")
 
 
 def run_postseason_tournaments():
