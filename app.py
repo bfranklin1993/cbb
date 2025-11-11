@@ -80,6 +80,16 @@ st.markdown("""
         font-size: 1.2em;
     }
 
+    .tie-box {
+        background-color: #3d3d1a;
+        border-left: 4px solid #ffa726;
+        padding: 12px;
+        margin: 8px 0;
+        border-radius: 4px;
+        font-family: 'Teko', sans-serif;
+        font-size: 1.2em;
+    }
+
     /* Info boxes */
     .info-box {
         background-color: #1a1a2e;
@@ -365,11 +375,19 @@ def dashboard_page():
                         our_score = result['home_score'] if result['home_team'] == team.name else result['away_score']
                         opp_score = result['away_score'] if result['home_team'] == team.name else result['home_score']
                         opponent = result['away_team'] if result['home_team'] == team.name else result['home_team']
-                        won = our_score > opp_score
-                        location = "vs" if result['home_team'] == team.name else "@"
 
-                        box_class = "win-box" if won else "loss-box"
-                        result_text = "W" if won else "L"
+                        # Handle wins, losses, and ties
+                        if our_score > opp_score:
+                            box_class = "win-box"
+                            result_text = "W"
+                        elif our_score < opp_score:
+                            box_class = "loss-box"
+                            result_text = "L"
+                        else:  # Tie
+                            box_class = "tie-box"
+                            result_text = "T"
+
+                        location = "vs" if result['home_team'] == team.name else "@"
 
                         st.markdown(f"""
                         <div class="{box_class}">
@@ -561,24 +579,49 @@ def show_schedule(team):
     completed = [g for g in schedule if g.get('played', False)]
     upcoming = [g for g in schedule if not g.get('played', False)]
 
-    # Show record
-    wins = len([g for g in completed if g.get('won', False)])
-    losses = len([g for g in completed if not g.get('won', False)])
-    st.metric("Record", f"{wins}-{losses}")
+    # Show record with ties
+    wins = 0
+    losses = 0
+    ties = 0
+    for g in completed:
+        team_score = g.get('team_score', 0)
+        opp_score = g.get('opp_score', 0)
+        if team_score > opp_score:
+            wins += 1
+        elif team_score < opp_score:
+            losses += 1
+        else:
+            ties += 1
+
+    if ties > 0:
+        st.metric("Record", f"{wins}-{losses}-{ties}")
+    else:
+        st.metric("Record", f"{wins}-{losses}")
 
     # Display completed games
     if completed:
         st.markdown("#### COMPLETED GAMES")
         for game in completed:
-            won = game.get('won', False)
-            box_class = "win-box" if won else "loss-box"
-            result_text = "W" if won else "L"
+            team_score = game.get('team_score', 0)
+            opp_score = game.get('opp_score', 0)
+
+            # Determine W/L/T
+            if team_score > opp_score:
+                box_class = "win-box"
+                result_text = "W"
+            elif team_score < opp_score:
+                box_class = "loss-box"
+                result_text = "L"
+            else:
+                box_class = "tie-box"
+                result_text = "T"
+
             location = "vs" if game['is_home'] else "@"
             conf_tag = " (CONF)" if game['is_conference'] else ""
             day_offset = game.get('day_offset', 0)
             game_date = season.week_to_date(game['week'] - 1, day_offset)  # week is 1-indexed
 
-            score_display = f"{game.get('team_score', 0)}-{game.get('opp_score', 0)}"
+            score_display = f"{team_score}-{opp_score}"
 
             st.markdown(
                 f'<div class="{box_class}">'
@@ -937,8 +980,19 @@ def advance_to_offseason():
     team = st.session_state.player_team
     season = st.session_state.current_season
 
-    # Advance players
+    # Advance players (this removes graduating seniors)
     season.advance_players()
+
+    # Have all AI teams recruit to fill their open spots
+    # This happens after seniors graduate but before next season
+    if st.session_state.recruiting_class:
+        rc = st.session_state.recruiting_class
+        for t in st.session_state.all_teams:
+            if t.name != team.name:  # Skip player's team
+                graduating = sum(1 for p in t.roster if p.year >= 4)
+                open_spots = max(0, graduating)
+                if open_spots > 0:
+                    recruit_players_auto(t, rc, open_spots)
 
     # Reset records
     for t in st.session_state.all_teams:
@@ -952,6 +1006,7 @@ def advance_to_offseason():
     # Advance year
     st.session_state.current_year += 1
     st.session_state.current_season = None
+    st.session_state.recruiting_class = None  # Reset recruiting class for new year
     st.session_state.page = "recruiting"
     st.rerun()
 

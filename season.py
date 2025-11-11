@@ -113,17 +113,24 @@ class Season:
 
                 # Each team can play up to 2 games per week
                 if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
-                    # Assign day: if first game, use Tue/Wed (1-2), if second game, use Sat (5)
-                    home_games_this_week = week_teams.get(home_team.name, 0)
-                    away_games_this_week = week_teams.get(away_team.name, 0)
+                    # Assign day: ensure no conflicts
+                    home_days = week_team_days.get(home_team.name, set())
+                    away_days = week_team_days.get(away_team.name, set())
 
-                    if home_games_this_week == 0 and away_games_this_week == 0:
-                        day_offset = random.choice([1, 2])  # Tuesday or Wednesday
-                    else:
-                        day_offset = 5  # Saturday for second game
+                    # Available days: Tue(1), Wed(2), Thu(3), Sat(5), Sun(6)
+                    available_days = [1, 2, 3, 5, 6]
 
-                    self.schedule[week_idx].append((home_team, away_team, is_conf, day_offset))
-                    break
+                    # Find a day that works for both teams
+                    day_offset = None
+                    for day in available_days:
+                        if day not in home_days and day not in away_days:
+                            day_offset = day
+                            break
+
+                    # If we found a valid day, schedule the game
+                    if day_offset is not None:
+                        self.schedule[week_idx].append((home_team, away_team, is_conf, day_offset))
+                        break
 
         # Schedule conference games in weeks 9-18
         for game in conference_games:
@@ -142,17 +149,24 @@ class Season:
 
                 # Each team can play up to 2 games per week
                 if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
-                    # Assign day: if first game, use Tue/Wed (1-2), if second game, use Sat (5)
-                    home_games_this_week = week_teams.get(home_team.name, 0)
-                    away_games_this_week = week_teams.get(away_team.name, 0)
+                    # Assign day: ensure no conflicts
+                    home_days = week_team_days.get(home_team.name, set())
+                    away_days = week_team_days.get(away_team.name, set())
 
-                    if home_games_this_week == 0 and away_games_this_week == 0:
-                        day_offset = random.choice([1, 2])  # Tuesday or Wednesday
-                    else:
-                        day_offset = 5  # Saturday for second game
+                    # Available days: Tue(1), Wed(2), Thu(3), Sat(5), Sun(6)
+                    available_days = [1, 2, 3, 5, 6]
 
-                    self.schedule[week_idx].append((home_team, away_team, is_conf, day_offset))
-                    break
+                    # Find a day that works for both teams
+                    day_offset = None
+                    for day in available_days:
+                        if day not in home_days and day not in away_days:
+                            day_offset = day
+                            break
+
+                    # If we found a valid day, schedule the game
+                    if day_offset is not None:
+                        self.schedule[week_idx].append((home_team, away_team, is_conf, day_offset))
+                        break
 
     def simulate_week(self) -> List[dict]:
         """Simulate one week of games"""
