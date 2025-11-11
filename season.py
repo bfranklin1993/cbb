@@ -113,17 +113,25 @@ class Season:
 
                 # Each team can play up to 2 games per week
                 if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
-                    # Assign day: ensure no conflicts
+                    # Assign day: ensure no conflicts and no back-to-back games
                     home_days = week_team_days.get(home_team.name, set())
                     away_days = week_team_days.get(away_team.name, set())
 
                     # Available days: Tue(1), Wed(2), Thu(3), Sat(5), Sun(6)
                     available_days = [1, 2, 3, 5, 6]
 
-                    # Find a day that works for both teams
+                    # Find a day that works for both teams (no same day, no consecutive days)
                     day_offset = None
                     for day in available_days:
-                        if day not in home_days and day not in away_days:
+                        # Check if day is already taken
+                        if day in home_days or day in away_days:
+                            continue
+
+                        # Check if adjacent days are taken (no back-to-back games)
+                        home_has_adjacent = any(abs(day - d) == 1 for d in home_days)
+                        away_has_adjacent = any(abs(day - d) == 1 for d in away_days)
+
+                        if not home_has_adjacent and not away_has_adjacent:
                             day_offset = day
                             break
 
@@ -149,17 +157,25 @@ class Season:
 
                 # Each team can play up to 2 games per week
                 if week_teams.get(home_team.name, 0) < 2 and week_teams.get(away_team.name, 0) < 2:
-                    # Assign day: ensure no conflicts
+                    # Assign day: ensure no conflicts and no back-to-back games
                     home_days = week_team_days.get(home_team.name, set())
                     away_days = week_team_days.get(away_team.name, set())
 
                     # Available days: Tue(1), Wed(2), Thu(3), Sat(5), Sun(6)
                     available_days = [1, 2, 3, 5, 6]
 
-                    # Find a day that works for both teams
+                    # Find a day that works for both teams (no same day, no consecutive days)
                     day_offset = None
                     for day in available_days:
-                        if day not in home_days and day not in away_days:
+                        # Check if day is already taken
+                        if day in home_days or day in away_days:
+                            continue
+
+                        # Check if adjacent days are taken (no back-to-back games)
+                        home_has_adjacent = any(abs(day - d) == 1 for d in home_days)
+                        away_has_adjacent = any(abs(day - d) == 1 for d in away_days)
+
+                        if not home_has_adjacent and not away_has_adjacent:
                             day_offset = day
                             break
 
@@ -279,6 +295,15 @@ class Season:
                     day_offset = 0
 
                 if home_team.name == team.name or away_team.name == team.name:
+                    # Check if this game has already been played
+                    game_played = any(
+                        r['home_team'] == home_team.name and r['away_team'] == away_team.name
+                        for r in team.results
+                    )
+
+                    if game_played:
+                        continue  # Skip this game, it's already been played
+
                     is_home = home_team.name == team.name
                     opponent = away_team if is_home else home_team
 

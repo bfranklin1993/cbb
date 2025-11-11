@@ -408,7 +408,7 @@ def dashboard_page():
         st.markdown("---")
         st.markdown("### 📅 UPCOMING GAMES")
         schedule = season.get_team_schedule(team)
-        upcoming = [g for g in schedule if not g['played']][:8]
+        upcoming = [g for g in schedule if not g['played']]  # Show ALL upcoming games
 
         if upcoming:
             # Show in a more visible format
@@ -633,7 +633,7 @@ def show_schedule(team):
     # Display upcoming games
     if upcoming:
         st.markdown("#### UPCOMING GAMES")
-        for game in upcoming[:10]:  # Show next 10 games
+        for game in upcoming:  # Show ALL upcoming games
             location = "vs" if game['is_home'] else "@"
             conf_tag = " (CONF)" if game['is_conference'] else ""
             day_offset = game.get('day_offset', 0)
