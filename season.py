@@ -295,18 +295,18 @@ class Season:
         return None
 
     def simulate_to_next_game(self, team: Team) -> dict:
-        """Simulate ONLY the specified team's next game (not all games in the week)"""
+        """Simulate up to and including the team's next game"""
         next_game = self.get_next_game_for_team(team)
         if not next_game:
             return None
 
         target_week = next_game['week']
 
-        # Simulate all weeks before the target week
+        # If the target week is ahead of current week, simulate all intervening weeks
         while self.current_week < target_week:
             self.simulate_week()
 
-        # Now simulate ONLY the target game in the target week
+        # Now we're in the target week - find and simulate the team's game
         week_games = self.schedule[target_week]
 
         for game_tuple in week_games:
@@ -319,10 +319,30 @@ class Season:
 
             # Check if this is the team's game
             if home_team.name == team.name or away_team.name == team.name:
-                # Simulate only this game
+                # Simulate only this specific game
                 result = self.game_engine.simulate_game_with_details(
                     home_team, away_team, is_conference
                 )
+
+                # After playing the game, check if there are more games for this team in the current week
+                # If not, we can advance the week
+                has_more_games_this_week = False
+                for gt in week_games:
+                    ht, at = gt[0], gt[1]
+                    if (ht.name == team.name or at.name == team.name) and (ht.name != home_team.name or at.name != away_team.name):
+                        # Check if this other game for the team has been played
+                        game_played = any(
+                            (r['home_team'] == ht.name and r['away_team'] == at.name)
+                            for r in ht.results
+                        )
+                        if not game_played:
+                            has_more_games_this_week = True
+                            break
+
+                # If no more games for team this week, advance
+                if not has_more_games_this_week:
+                    self.current_week += 1
+
                 return result
 
         return None

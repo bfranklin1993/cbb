@@ -247,8 +247,17 @@ def dashboard_page():
         # Preseason rankings based on team rating and prestige
         all_teams_sorted = sorted(st.session_state.all_teams, key=lambda t: t.get_team_rating(), reverse=True)
     else:
-        # In-season rankings based on record
-        all_teams_sorted = sorted(st.session_state.all_teams, key=lambda t: (t.wins, -t.losses), reverse=True)
+        # In-season rankings based on win percentage and total wins
+        # Sort by: win% (primary), total wins (tiebreaker), rating (final tiebreaker)
+        all_teams_sorted = sorted(
+            st.session_state.all_teams,
+            key=lambda t: (
+                t.wins / max(t.games_played, 1),  # Win percentage
+                t.wins,  # Total wins (tiebreaker)
+                t.get_team_rating()  # Rating (final tiebreaker)
+            ),
+            reverse=True
+        )
 
     team_rank = next((i+1 for i, t in enumerate(all_teams_sorted) if t.name == team.name), None)
     rank_display = f"#{team_rank} " if team_rank and team_rank <= 25 else ""
@@ -350,14 +359,20 @@ def dashboard_page():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("⏭️ SIM TO NEXT GAME", type="primary", use_container_width=True):
+                    # Track the week before simulation
+                    old_week = season.current_week
+
                     result = season.simulate_to_next_game(team)
                     if result:
                         st.session_state.last_results = [result]
-                    # Reset recruiting actions (get 5 actions per game)
-                    st.session_state.recruiting_actions_remaining = 5
-                    # Update recruit interest levels each week
-                    if st.session_state.recruiting_class is not None:
-                        st.session_state.recruiting_class.update_weekly_interest()
+
+                    # Only reset recruiting actions if week changed (not per game)
+                    if season.current_week > old_week:
+                        st.session_state.recruiting_actions_remaining = 5
+                        # Update recruit interest levels each week
+                        if st.session_state.recruiting_class is not None:
+                            st.session_state.recruiting_class.update_weekly_interest()
+
                     st.rerun()
             with col2:
                 if st.button("⏩ SIM TO END", use_container_width=True):
@@ -568,9 +583,12 @@ def show_schedule(team):
         st.info("Schedule will be generated at season start")
         return
 
+    # Sort schedule chronologically by week and day_offset
+    schedule_sorted = sorted(schedule, key=lambda g: (g['week'], g.get('day_offset', 0)))
+
     # Separate into completed and upcoming games
-    completed = [g for g in schedule if g.get('played', False)]
-    upcoming = [g for g in schedule if not g.get('played', False)]
+    completed = [g for g in schedule_sorted if g.get('played', False)]
+    upcoming = [g for g in schedule_sorted if not g.get('played', False)]
 
     # Show record (no ties - games go to OT)
     wins = 0

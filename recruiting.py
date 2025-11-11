@@ -280,9 +280,9 @@ class Recruit:
 
         # Minimal interest boost - scouting is mainly for info gathering
         team_fit = self.calculate_team_fit(team)
-        base_boost = random.uniform(0.5, 1.0)  # 0.5-1 base
-        fit_bonus = team_fit / 200  # 0-0.5 based on fit
-        interest_boost = base_boost + fit_bonus  # Total: 0.5-1.5 points
+        base_boost = random.uniform(0.3, 0.5)  # 0.3-0.5 base (reduced from 0.5-1.0)
+        fit_bonus = team_fit / 300  # 0-0.33 based on fit (reduced from /200)
+        interest_boost = base_boost + fit_bonus  # Total: 0.3-0.8 points (was 0.5-1.5)
 
         self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
         self.interest = self.team_interests[team.name]  # Update current interest
@@ -298,11 +298,11 @@ class Recruit:
             # Use realistic calculation based on prestige, not hardcoded high value
             self.team_interests[team.name] = self._calculate_realistic_initial_interest(team)
 
-        # Moderate interest boost - visiting is important but not huge
+        # Small interest boost - visiting helps but isn't magical
         team_fit = self.calculate_team_fit(team)
-        base_boost = random.uniform(2, 4)  # 2-4 base (reduced from 3-6)
-        fit_bonus = team_fit / 30  # 0-3.3 based on fit (reduced from /20)
-        interest_boost = base_boost + fit_bonus  # Total: 2-7.3 points
+        base_boost = random.uniform(1.0, 2.0)  # 1-2 base (reduced from 2-4)
+        fit_bonus = team_fit / 100  # 0-1.0 based on fit (reduced from /30)
+        interest_boost = base_boost + fit_bonus  # Total: 1-3 points (was 2-7.3)
 
         self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
         self.interest = self.team_interests[team.name]  # Update current interest
@@ -318,11 +318,11 @@ class Recruit:
             # Use realistic calculation based on prestige, not hardcoded high value
             self.team_interests[team.name] = self._calculate_realistic_initial_interest(team)
 
-        # Small interest boost for being offered - offer shows serious interest but isn't magic
+        # Minimal interest boost for being offered - offer is expected, not special
         team_fit = self.calculate_team_fit(team)
-        base_boost = random.uniform(1, 3)  # 1-3 base (reduced from 2-5)
-        fit_bonus = team_fit / 40  # 0-2.5 based on fit (reduced from /25)
-        interest_boost = base_boost + fit_bonus  # Total: 1-5.5 points
+        base_boost = random.uniform(0.5, 1.5)  # 0.5-1.5 base (reduced from 1-3)
+        fit_bonus = team_fit / 200  # 0-0.5 based on fit (reduced from /40)
+        interest_boost = base_boost + fit_bonus  # Total: 0.5-2 points (was 1-5.5)
 
         self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
         self.interest = self.team_interests[team.name]  # Update current interest
