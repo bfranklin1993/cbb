@@ -298,11 +298,11 @@ class Recruit:
             # Use realistic calculation based on prestige, not hardcoded high value
             self.team_interests[team.name] = self._calculate_realistic_initial_interest(team)
 
-        # Bigger interest boost based on team fit - reduced from original
+        # Moderate interest boost - visiting is important but not huge
         team_fit = self.calculate_team_fit(team)
-        base_boost = random.uniform(3, 6)  # 3-6 base
-        fit_bonus = team_fit / 20  # 0-5 based on fit
-        interest_boost = base_boost + fit_bonus  # Total: 3-11 points
+        base_boost = random.uniform(2, 4)  # 2-4 base (reduced from 3-6)
+        fit_bonus = team_fit / 30  # 0-3.3 based on fit (reduced from /20)
+        interest_boost = base_boost + fit_bonus  # Total: 2-7.3 points
 
         self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
         self.interest = self.team_interests[team.name]  # Update current interest
@@ -318,11 +318,11 @@ class Recruit:
             # Use realistic calculation based on prestige, not hardcoded high value
             self.team_interests[team.name] = self._calculate_realistic_initial_interest(team)
 
-        # Interest boost for being offered - reduced from original
+        # Small interest boost for being offered - offer shows serious interest but isn't magic
         team_fit = self.calculate_team_fit(team)
-        base_boost = random.uniform(2, 5)  # 2-5 base
-        fit_bonus = team_fit / 25  # 0-4 based on fit
-        interest_boost = base_boost + fit_bonus  # Total: 2-9 points
+        base_boost = random.uniform(1, 3)  # 1-3 base (reduced from 2-5)
+        fit_bonus = team_fit / 40  # 0-2.5 based on fit (reduced from /25)
+        interest_boost = base_boost + fit_bonus  # Total: 1-5.5 points
 
         self.team_interests[team.name] = min(100, self.team_interests[team.name] + interest_boost)
         self.interest = self.team_interests[team.name]  # Update current interest
@@ -401,31 +401,34 @@ class Recruit:
         if self.stars == 5 or self.ranking <= 20:  # Top tier - EXTREMELY HARD
             # Need ELITE prestige AND be #1 choice for decent chance
             if team.prestige in ["ELITE"] and team_rank == 1:
-                base_chance = 60
+                base_chance = 45  # Even #1 elite school only 45% (down from 60)
             elif team.prestige in ["ELITE"] and team_rank <= 2:
-                base_chance = 40
+                base_chance = 25  # #2 elite school 25% (down from 40)
             elif team.prestige in ["HIGH"] and team_rank == 1:
-                base_chance = 50
+                base_chance = 30  # High prestige #1 is 30% (down from 50)
             else:
-                base_chance = 15  # Very low chance otherwise
+                base_chance = 5  # Almost impossible otherwise (down from 15)
         elif self.stars == 4 or self.ranking <= 100:  # 4-stars - VERY HARD
             if team.prestige in ["ELITE", "HIGH"] and team_rank <= 2:
-                base_chance = 65
+                base_chance = 50  # Down from 65
             elif team.prestige in ["ELITE", "HIGH", "UPPER_MID"] and team_rank <= 3:
-                base_chance = 50
+                base_chance = 35  # Down from 50
             else:
-                base_chance = 30
+                base_chance = 15  # Down from 30
         elif self.stars == 3 or self.ranking <= 300:  # 3-stars - HARD
             if team_rank <= 3:
-                base_chance = 70
+                base_chance = 55  # Down from 70
             else:
-                base_chance = 45
+                base_chance = 30  # Down from 45
         else:  # 2-stars - MODERATE
-            base_chance = 75
+            if team_rank <= 3:
+                base_chance = 60  # Down from 75
+            else:
+                base_chance = 40
 
-        # Add small interest bonus (max +10, reduced from +20)
-        interest_bonus = (team_interest - 85) / 3  # 0-5 bonus
-        success_chance = min(90, base_chance + interest_bonus + (team_fit / 15))
+        # Add tiny interest bonus (max +5, significantly reduced)
+        interest_bonus = (team_interest - 90) / 4  # 0-2.5 bonus max
+        success_chance = min(75, base_chance + interest_bonus + (team_fit / 25))  # Cap at 75% (down from 90%)
 
         if random.uniform(0, 100) < success_chance:
             self.committed = True

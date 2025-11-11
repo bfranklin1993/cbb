@@ -376,17 +376,10 @@ def dashboard_page():
                         opp_score = result['away_score'] if result['home_team'] == team.name else result['home_score']
                         opponent = result['away_team'] if result['home_team'] == team.name else result['home_team']
 
-                        # Handle wins, losses, and ties
-                        if our_score > opp_score:
-                            box_class = "win-box"
-                            result_text = "W"
-                        elif our_score < opp_score:
-                            box_class = "loss-box"
-                            result_text = "L"
-                        else:  # Tie
-                            box_class = "tie-box"
-                            result_text = "T"
-
+                        # Handle wins and losses (no ties in basketball - games go to OT)
+                        won = our_score > opp_score
+                        box_class = "win-box" if won else "loss-box"
+                        result_text = "W" if won else "L"
                         location = "vs" if result['home_team'] == team.name else "@"
 
                         st.markdown(f"""
@@ -579,24 +572,18 @@ def show_schedule(team):
     completed = [g for g in schedule if g.get('played', False)]
     upcoming = [g for g in schedule if not g.get('played', False)]
 
-    # Show record with ties
+    # Show record (no ties - games go to OT)
     wins = 0
     losses = 0
-    ties = 0
     for g in completed:
         team_score = g.get('team_score', 0)
         opp_score = g.get('opp_score', 0)
         if team_score > opp_score:
             wins += 1
-        elif team_score < opp_score:
-            losses += 1
         else:
-            ties += 1
+            losses += 1
 
-    if ties > 0:
-        st.metric("Record", f"{wins}-{losses}-{ties}")
-    else:
-        st.metric("Record", f"{wins}-{losses}")
+    st.metric("Record", f"{wins}-{losses}")
 
     # Display completed games
     if completed:
@@ -605,16 +592,10 @@ def show_schedule(team):
             team_score = game.get('team_score', 0)
             opp_score = game.get('opp_score', 0)
 
-            # Determine W/L/T
-            if team_score > opp_score:
-                box_class = "win-box"
-                result_text = "W"
-            elif team_score < opp_score:
-                box_class = "loss-box"
-                result_text = "L"
-            else:
-                box_class = "tie-box"
-                result_text = "T"
+            # Determine W/L (no ties - games go to OT)
+            won = team_score > opp_score
+            box_class = "win-box" if won else "loss-box"
+            result_text = "W" if won else "L"
 
             location = "vs" if game['is_home'] else "@"
             conf_tag = " (CONF)" if game['is_conference'] else ""
@@ -814,28 +795,6 @@ def recruiting_page():
         st.info("No recruits available.")
         return
 
-    # Recruit list
-    recruit_data = []
-    for r in recruits:
-        # Show team-specific interest if known, otherwise "Unknown"
-        team_interest = r.team_interests.get(team.name, None)
-        interest_display = f"{int(team_interest)}%" if team_interest is not None else "Unknown"
-
-        recruit_data.append({
-            "Rank": f"#{r.ranking}",
-            "Name": r.name,
-            "Pos": r.position,
-            "Stars": "⭐" * r.stars,
-            "State": r.state,
-            "Offense": r.get_offense_rating(),
-            "Defense": r.get_defense_rating(),
-            "Fundamentals": r.get_fundamentals_rating(),
-            "Interest": interest_display
-        })
-
-    df = pd.DataFrame(recruit_data)
-    st.dataframe(df, use_container_width=True, hide_index=True, height=350)
-
     # Show commits
     if commits:
         with st.expander(f"YOUR COMMITS ({len(commits)})", expanded=False):
@@ -843,14 +802,52 @@ def recruiting_page():
                 st.text(f"{'⭐' * commit.stars} {commit.name} ({commit.position}) - #{commit.ranking} - {commit.state}")
 
     st.markdown("---")
+    st.markdown("### RECRUITS (Click to view details)")
 
-    # Recruit selection and actions
-    recruit_names = [f"#{r.ranking} {r.name} ({r.position}, {r.state})" for r in recruits[:30]]
-    selected = st.selectbox("Select recruit for actions:", [""] + recruit_names)
+    # Initialize selected recruit in session state
+    if 'selected_recruit_name' not in st.session_state:
+        st.session_state.selected_recruit_name = None
 
-    if selected:
-        idx = recruit_names.index(selected)
-        recruit = recruits[idx]
+    # Show recruits as clickable cards - limit to 20 at a time for performance
+    recruits_display = recruits[:20]
+
+    for r in recruits_display:
+        # Show team-specific interest if known, otherwise "Unknown"
+        team_interest = r.team_interests.get(team.name, None)
+        interest_display = f"{int(team_interest)}%" if team_interest is not None else "?"
+
+        # Highlight if this recruit is selected
+        is_selected = st.session_state.selected_recruit_name == r.name
+        button_type = "primary" if is_selected else "secondary"
+
+        # Create a clickable button for each recruit
+        col1, col2, col3, col4, col5 = st.columns([1, 3, 2, 2, 1])
+        with col1:
+            st.text(f"#{r.ranking}")
+        with col2:
+            if st.button(f"{'⭐' * r.stars} {r.name}", key=f"recruit_{r.name}_{r.ranking}", type=button_type, use_container_width=True):
+                st.session_state.selected_recruit_name = r.name
+                st.rerun()
+        with col3:
+            st.text(f"{r.position} • {r.state}")
+        with col4:
+            st.text(f"{r.get_offense_rating()} / {r.get_defense_rating()}")
+        with col5:
+            st.text(f"{interest_display}")
+
+    st.caption(f"Showing {len(recruits_display)} of {len(recruits)} recruits")
+
+    st.markdown("---")
+
+    # Show detailed info for selected recruit
+    if st.session_state.selected_recruit_name:
+        # Find the selected recruit
+        recruit = next((r for r in recruits if r.name == st.session_state.selected_recruit_name), None)
+
+        if not recruit:
+            st.warning("Recruit not found")
+            st.session_state.selected_recruit_name = None
+            return
 
         # Recruit details
         col1, col2, col3 = st.columns(3)

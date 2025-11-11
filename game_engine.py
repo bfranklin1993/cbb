@@ -39,6 +39,16 @@ class GameEngine:
         home_score = self._calculate_team_score(home_team, away_team, is_home=True)
         away_score = self._calculate_team_score(away_team, home_team, is_home=False)
 
+        # Handle overtime - keep playing until there's a winner
+        overtime_count = 0
+        while home_score == away_score:
+            overtime_count += 1
+            # Each overtime is 5 minutes (about 1/8 of regulation)
+            ot_home = self._calculate_overtime_score(home_team, away_team, is_home=True)
+            ot_away = self._calculate_overtime_score(away_team, home_team, is_home=False)
+            home_score += ot_home
+            away_score += ot_away
+
         # Update team games played
         home_team.games_played += 1
         away_team.games_played += 1
@@ -62,6 +72,47 @@ class GameEngine:
         self._update_player_stats(away_team, away_score)
 
         return home_score, away_score
+
+    def _calculate_overtime_score(self, team: Team, opponent: Team, is_home: bool = True) -> int:
+        """Calculate score for a 5-minute overtime period"""
+        starters = team.get_starting_five()
+
+        # Base offensive rating
+        offensive_rating = sum(p.overall_rating() for p in starters) / 5
+
+        # Apply offensive system bonuses
+        offensive_bonuses = self.offensive_bonuses.get(team.offensive_system, {})
+        for attr, bonus in offensive_bonuses.items():
+            avg_attr = sum(getattr(p, attr) for p in starters) / 5
+            offensive_rating += avg_attr * bonus
+
+        # Opponent defensive rating
+        opponent_starters = opponent.get_starting_five()
+        defensive_rating = sum(p.defense for p in opponent_starters) / 5
+
+        # Apply opponent defensive system
+        defensive_bonuses = self.defensive_bonuses.get(opponent.defensive_system, {})
+        for attr, bonus in defensive_bonuses.items():
+            avg_attr = sum(getattr(p, attr) for p in opponent_starters) / 5
+            defensive_rating += avg_attr * bonus
+
+        # Home court advantage
+        if is_home:
+            offensive_rating += 0.5
+
+        # Calculate efficiency
+        efficiency = 0.95 + (offensive_rating - defensive_rating) * 0.02
+        efficiency = max(0.7, min(1.3, efficiency))
+
+        # OT is about 1/8 of regulation (5 min vs 40 min)
+        possessions = random.randint(8, 12)
+        base_score = possessions * efficiency
+
+        # Add some randomness
+        variance = random.uniform(-1, 1)
+        final_score = int(base_score + variance)
+
+        return max(5, final_score)  # Minimum 5 points in OT
 
     def _calculate_team_score(self, team: Team, opponent: Team, is_home: bool = True) -> int:
         """Calculate a team's score based on attributes and systems"""
