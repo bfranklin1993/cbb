@@ -367,12 +367,19 @@ def dashboard_page():
             if st.button("🏆 POSTSEASON", type="primary", use_container_width=True):
                 run_postseason_tournaments()
         else:
+            # DEBUG: Always show current state
+            st.error(f"🔍 STATE CHECK - Week: {season.current_week}/{season.total_weeks} | Games Played Tracker: {len(season.played_games)} | Your Record: {team.wins}-{team.losses}")
+            if len(season.played_games) > 0:
+                recent = list(season.played_games)[-3:]
+                st.error(f"Last 3 games in tracker: {recent}")
+
             # Show next game info
             next_game = season.get_next_game_for_team(team)
             if next_game:
                 location = "vs" if next_game['is_home'] else "@"
                 conf_tag = " (CONFERENCE)" if next_game['is_conference'] else ""
                 st.info(f"**NEXT GAME:** {next_game['date']} • {location} {next_game['opponent'].name}{conf_tag}")
+                st.error(f"Next opponent details: Week {next_game['week']}, Home={next_game['is_home']}")
 
             # Simulation controls
             col1, col2 = st.columns(2)
