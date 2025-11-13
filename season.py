@@ -19,6 +19,7 @@ class Season:
         self.schedule = []
         self.current_week = 0
         self.total_weeks = 18  # 18 weeks of regular season (Nov-Feb)
+        self.played_games = set()  # Track played games as (week, home_team_name, away_team_name) tuples
 
     def generate_schedule(self):
         """Generate realistic schedule: Non-conf in Nov-Dec, Conference in Jan-Mar"""
@@ -32,6 +33,10 @@ class Season:
         for conference in CONFERENCES.keys():
             conf_teams = [t for t in self.all_teams if t.conference == conference]
             conf_size = len(conf_teams)
+
+            # Track home/away balance per team
+            home_games = {team.name: 0 for team in conf_teams}
+            away_games = {team.name: 0 for team in conf_teams}
 
             # Determine number of conference games based on conference size
             if conf_size >= 16:
@@ -50,20 +55,28 @@ class Season:
                     matchup = tuple(sorted([team1.name, team2.name]))
 
                     if matchup not in scheduled_matchups:
-                        # Home game for one team
-                        if random.random() < 0.5:
+                        # Decide home/away based on current balance
+                        team1_home_ratio = home_games[team1.name] / max(home_games[team1.name] + away_games[team1.name], 1)
+                        team2_home_ratio = home_games[team2.name] / max(home_games[team2.name] + away_games[team2.name], 1)
+
+                        # Team with fewer home games gets home court
+                        if team1_home_ratio < team2_home_ratio:
                             conference_games.append((team1, team2, True))
+                            home_games[team1.name] += 1
+                            away_games[team2.name] += 1
                         else:
                             conference_games.append((team2, team1, True))
+                            home_games[team2.name] += 1
+                            away_games[team1.name] += 1
                         scheduled_matchups.add(matchup)
 
-            # Add return games to reach target conference games
+            # Add return games to reach target conference games, maintaining balance
             games_per_team_so_far = conf_size - 1
             if games_per_team_so_far < target_conf_games:
                 # Calculate how many return games needed
                 return_games_needed = (target_conf_games - games_per_team_so_far) // 2
 
-                # Add return games for random matchups
+                # Add return games for random matchups, maintaining balance
                 for i, team1 in enumerate(conf_teams):
                     if return_games_needed > 0:
                         # Select random opponents for return games
@@ -71,8 +84,18 @@ class Season:
                         opponents = random.sample([t for t in conf_teams if t != team1], num_return)
 
                         for team2 in opponents:
-                            # Add return game (opposite venue from first game)
-                            conference_games.append((team2, team1, True))
+                            # Decide home/away based on balance
+                            team1_home_ratio = home_games[team1.name] / max(home_games[team1.name] + away_games[team1.name], 1)
+                            team2_home_ratio = home_games[team2.name] / max(home_games[team2.name] + away_games[team2.name], 1)
+
+                            if team1_home_ratio < team2_home_ratio:
+                                conference_games.append((team1, team2, True))
+                                home_games[team1.name] += 1
+                                away_games[team2.name] += 1
+                            else:
+                                conference_games.append((team2, team1, True))
+                                home_games[team2.name] += 1
+                                away_games[team1.name] += 1
 
         # Generate non-conference games - 5-7 games per team
         for team in self.all_teams:
@@ -201,6 +224,10 @@ class Season:
                 home_team, away_team, is_conference = game_tuple
                 day_offset = 0
 
+            # Mark this game as played
+            game_key = (self.current_week, home_team.name, away_team.name)
+            self.played_games.add(game_key)
+
             result = self.game_engine.simulate_game_with_details(
                 home_team, away_team, is_conference
             )
@@ -295,13 +322,9 @@ class Season:
                     day_offset = 0
 
                 if home_team.name == team.name or away_team.name == team.name:
-                    # Check if this game has already been played
-                    game_played = any(
-                        r['home_team'] == home_team.name and r['away_team'] == away_team.name
-                        for r in team.results
-                    )
-
-                    if game_played:
+                    # Check if this game has already been played using played_games set
+                    game_key = (week_idx, home_team.name, away_team.name)
+                    if game_key in self.played_games:
                         continue  # Skip this game, it's already been played
 
                     is_home = home_team.name == team.name
@@ -349,8 +372,11 @@ class Season:
                 result = self.game_engine.simulate_game_with_details(
                     home_team, away_team, is_conference
                 )
-                # Do NOT increment current_week here - let app.py handle it
-                # based on whether there are more games for this team
+
+                # Mark this game as played
+                game_key = (target_week, home_team.name, away_team.name)
+                self.played_games.add(game_key)
+
                 return result
 
         return None

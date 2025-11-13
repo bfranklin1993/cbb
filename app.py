@@ -241,33 +241,44 @@ def dashboard_page():
     team = st.session_state.player_team
     season = st.session_state.current_season
 
-    # Get team ranking using power ranking system
-    # Blends record with team rating - record matters more as season progresses
-    def power_ranking(t):
-        if t.games_played == 0:
-            # No games yet - pure rating
-            return t.get_team_rating()
-        else:
-            # Blend win% and rating - rating influence decreases as games increase
-            win_pct = t.wins / t.games_played
-            rating = t.get_team_rating()
+    # Get team ranking - only update at week boundaries to prevent mid-week changes
+    current_week = season.current_week if season else 0
 
-            # Weight: early season ratings matter, late season record matters
-            # At 1 game: 80% rating, 20% record
-            # At 10 games: 50% rating, 50% record
-            # At 20+ games: 20% rating, 80% record
-            games_factor = min(t.games_played / 25, 1.0)
-            record_weight = 0.2 + (games_factor * 0.6)
-            rating_weight = 1.0 - record_weight
+    # Check if we need to recalculate rankings (week changed or first time)
+    if 'rankings_week' not in st.session_state or st.session_state.rankings_week != current_week:
+        # Recalculate rankings using power ranking system
+        def power_ranking(t):
+            if t.games_played == 0:
+                # No games yet - pure rating
+                return t.get_team_rating()
+            else:
+                # Blend win% and rating - rating influence decreases as games increase
+                win_pct = t.wins / t.games_played
+                rating = t.get_team_rating()
 
-            # Convert win% to 0-100 scale to match rating scale
-            record_score = win_pct * 100
+                # Weight: early season ratings matter, late season record matters
+                # At 1 game: 80% rating, 20% record
+                # At 10 games: 50% rating, 50% record
+                # At 20+ games: 20% rating, 80% record
+                games_factor = min(t.games_played / 25, 1.0)
+                record_weight = 0.2 + (games_factor * 0.6)
+                rating_weight = 1.0 - record_weight
 
-            return (record_score * record_weight) + (rating * rating_weight)
+                # Convert win% to 0-100 scale to match rating scale
+                record_score = win_pct * 100
 
-    all_teams_sorted = sorted(st.session_state.all_teams, key=power_ranking, reverse=True)
+                return (record_score * record_weight) + (rating * rating_weight)
 
-    team_rank = next((i+1 for i, t in enumerate(all_teams_sorted) if t.name == team.name), None)
+        all_teams_sorted = sorted(st.session_state.all_teams, key=power_ranking, reverse=True)
+        team_rank = next((i+1 for i, t in enumerate(all_teams_sorted) if t.name == team.name), None)
+
+        # Cache the ranking for this week
+        st.session_state.rankings_week = current_week
+        st.session_state.cached_team_rank = team_rank
+    else:
+        # Use cached ranking from start of week
+        team_rank = st.session_state.cached_team_rank
+
     rank_display = f"#{team_rank} " if team_rank and team_rank <= 25 else ""
 
     # Header
