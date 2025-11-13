@@ -320,7 +320,8 @@ class Season:
         return None
 
     def simulate_to_next_game(self, team: Team) -> dict:
-        """Simulate up to and including the team's next game"""
+        """Simulate up to and including the team's next game
+        Does NOT advance current_week - that should only happen when ALL games in week are done"""
         next_game = self.get_next_game_for_team(team)
         if not next_game:
             return None
@@ -331,7 +332,7 @@ class Season:
         while self.current_week < target_week:
             self.simulate_week()
 
-        # Now we're in the target week - find and simulate the team's game
+        # Now we're in the target week - find and simulate ONLY this team's specific game
         week_games = self.schedule[target_week]
 
         for game_tuple in week_games:
@@ -348,26 +349,8 @@ class Season:
                 result = self.game_engine.simulate_game_with_details(
                     home_team, away_team, is_conference
                 )
-
-                # After playing the game, check if there are more games for this team in the current week
-                # If not, we can advance the week
-                has_more_games_this_week = False
-                for gt in week_games:
-                    ht, at = gt[0], gt[1]
-                    if (ht.name == team.name or at.name == team.name) and (ht.name != home_team.name or at.name != away_team.name):
-                        # Check if this other game for the team has been played
-                        game_played = any(
-                            (r['home_team'] == ht.name and r['away_team'] == at.name)
-                            for r in ht.results
-                        )
-                        if not game_played:
-                            has_more_games_this_week = True
-                            break
-
-                # If no more games for team this week, advance
-                if not has_more_games_this_week:
-                    self.current_week += 1
-
+                # Do NOT increment current_week here - let app.py handle it
+                # based on whether there are more games for this team
                 return result
 
         return None

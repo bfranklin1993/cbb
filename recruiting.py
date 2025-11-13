@@ -38,7 +38,7 @@ class Recruit:
         # Track which teams are recruiting this player
         self.team_interests = {}  # {team_name: interest_level}
         self.scouted_by = set()  # Teams that have scouted this player
-        self.visited_by = set()  # Teams that have visited this player
+        self.visited_by = {}  # {team_name: [list of weeks visited]} - track visits per week
         self.offers_from = set()  # Teams that have offered scholarship
 
         # Recruit preferences (what they value most) - each recruit has 2-3 priorities
@@ -288,10 +288,20 @@ class Recruit:
         self.interest = self.team_interests[team.name]  # Update current interest
         return True
 
-    def visit_action(self, team: Team):
-        """Visit a player - significant interest boost"""
+    def visit_action(self, team: Team, current_week: int = 0):
+        """Visit a player - significant interest boost
+        Limit: 1 visit per team per week"""
+
+        # Check if already visited this week
+        if team.name in self.visited_by:
+            if current_week in self.visited_by[team.name]:
+                return False  # Already visited this week
+
+        # Track the visit
         self.times_visited += 1
-        self.visited_by.add(team.name)
+        if team.name not in self.visited_by:
+            self.visited_by[team.name] = []
+        self.visited_by[team.name].append(current_week)
 
         # Initialize team interest if not exists (recruit wasn't aware of this team)
         if team.name not in self.team_interests:

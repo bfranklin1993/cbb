@@ -142,18 +142,19 @@ class GameEngine:
             offensive_rating += 0.5
 
         # Calculate efficiency (points per possession)
-        efficiency = 0.95 + (offensive_rating - defensive_rating) * 0.02
-        efficiency = max(0.7, min(1.3, efficiency))  # Clamp between 0.7 and 1.3
+        # Increased multiplier to make rating differences matter more
+        efficiency = 0.95 + (offensive_rating - defensive_rating) * 0.04
+        efficiency = max(0.65, min(1.35, efficiency))  # Wider range: 0.65-1.35
 
-        # Calculate score
-        possessions = random.randint(65, 75)
+        # Calculate score - possessions vary more
+        possessions = random.randint(60, 80)  # More variance in pace
         base_score = possessions * efficiency
 
-        # Add some randomness (clutch plays, hot/cold shooting)
-        variance = random.uniform(-5, 5)
+        # Add significant randomness (hot/cold shooting, clutch plays, luck)
+        variance = random.uniform(-10, 10)  # Doubled variance
         final_score = int(base_score + variance)
 
-        return max(50, final_score)  # Minimum 50 points
+        return max(45, final_score)  # Lower minimum for blowouts
 
     def _update_player_stats(self, team: Team, team_score: int):
         """Update player statistics after a game using rotation system"""

@@ -241,23 +241,31 @@ def dashboard_page():
     team = st.session_state.player_team
     season = st.session_state.current_season
 
-    # Get team ranking
-    # Use preseason rankings (team rating) if no games played, otherwise use record
-    if team.games_played == 0:
-        # Preseason rankings based on team rating and prestige
-        all_teams_sorted = sorted(st.session_state.all_teams, key=lambda t: t.get_team_rating(), reverse=True)
-    else:
-        # In-season rankings based on win percentage and total wins
-        # Sort by: win% (primary), total wins (tiebreaker), rating (final tiebreaker)
-        all_teams_sorted = sorted(
-            st.session_state.all_teams,
-            key=lambda t: (
-                t.wins / max(t.games_played, 1),  # Win percentage
-                t.wins,  # Total wins (tiebreaker)
-                t.get_team_rating()  # Rating (final tiebreaker)
-            ),
-            reverse=True
-        )
+    # Get team ranking using power ranking system
+    # Blends record with team rating - record matters more as season progresses
+    def power_ranking(t):
+        if t.games_played == 0:
+            # No games yet - pure rating
+            return t.get_team_rating()
+        else:
+            # Blend win% and rating - rating influence decreases as games increase
+            win_pct = t.wins / t.games_played
+            rating = t.get_team_rating()
+
+            # Weight: early season ratings matter, late season record matters
+            # At 1 game: 80% rating, 20% record
+            # At 10 games: 50% rating, 50% record
+            # At 20+ games: 20% rating, 80% record
+            games_factor = min(t.games_played / 25, 1.0)
+            record_weight = 0.2 + (games_factor * 0.6)
+            rating_weight = 1.0 - record_weight
+
+            # Convert win% to 0-100 scale to match rating scale
+            record_score = win_pct * 100
+
+            return (record_score * record_weight) + (rating * rating_weight)
+
+    all_teams_sorted = sorted(st.session_state.all_teams, key=power_ranking, reverse=True)
 
     team_rank = next((i+1 for i, t in enumerate(all_teams_sorted) if t.name == team.name), None)
     rank_display = f"#{team_rank} " if team_rank and team_rank <= 25 else ""
@@ -359,19 +367,19 @@ def dashboard_page():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("⏭️ SIM TO NEXT GAME", type="primary", use_container_width=True):
-                    # Track the week before simulation
-                    old_week = season.current_week
-
                     result = season.simulate_to_next_game(team)
                     if result:
                         st.session_state.last_results = [result]
 
-                    # Only reset recruiting actions if week changed (not per game)
-                    if season.current_week > old_week:
-                        st.session_state.recruiting_actions_remaining = 5
-                        # Update recruit interest levels each week
-                        if st.session_state.recruiting_class is not None:
-                            st.session_state.recruiting_class.update_weekly_interest()
+                        # Check if team has more games this week
+                        next_game = season.get_next_game_for_team(team)
+                        if next_game is None or next_game['week'] > season.current_week:
+                            # No more games this week, advance to next week
+                            season.current_week += 1
+                            st.session_state.recruiting_actions_remaining = 5
+                            # Update recruit interest levels each week
+                            if st.session_state.recruiting_class is not None:
+                                st.session_state.recruiting_class.update_weekly_interest()
 
                     st.rerun()
             with col2:
@@ -408,7 +416,9 @@ def dashboard_page():
         st.markdown("---")
         st.markdown("### 📅 UPCOMING GAMES")
         schedule = season.get_team_schedule(team)
-        upcoming = [g for g in schedule if not g['played']]  # Show ALL upcoming games
+        # Sort by week and day_offset to show chronologically
+        schedule_sorted = sorted(schedule, key=lambda g: (g['week'], g.get('day_offset', 0)))
+        upcoming = [g for g in schedule_sorted if not g['played']]  # Show ALL upcoming games
 
         if upcoming:
             # Show in a more visible format
@@ -936,10 +946,13 @@ def recruiting_page():
 
         with col2:
             if st.button("✈️ VISIT", use_container_width=True, disabled=st.session_state.recruiting_actions_remaining <= 0):
-                recruit.visit_action(team)
-                st.session_state.recruiting_actions_remaining -= 1
-                interest = int(recruit.team_interests.get(team.name, 0))
-                st.success(f"Visited {recruit.name} (Interest: {interest}%)")
+                success = recruit.visit_action(team, current_week)
+                if success:
+                    st.session_state.recruiting_actions_remaining -= 1
+                    interest = int(recruit.team_interests.get(team.name, 0))
+                    st.success(f"Visited {recruit.name} (Interest: {interest}%)")
+                else:
+                    st.warning(f"Already visited {recruit.name} this week")
                 st.rerun()
 
         with col3:
@@ -973,7 +986,8 @@ def recruiting_page():
                 st.caption(f"Need higher interest to commit (currently {interest}%)")
 
         # Show recruiting history
-        st.caption(f"Scouted: {'Yes' if team.name in recruit.scouted_by else 'No'} • Visited: {len([v for v in recruit.visited_by if v == team.name])}x • Offered: {'Yes' if team.name in recruit.offers_from else 'No'}")
+        visit_count = len(recruit.visited_by.get(team.name, []))
+        st.caption(f"Scouted: {'Yes' if team.name in recruit.scouted_by else 'No'} • Visited: {visit_count}x • Offered: {'Yes' if team.name in recruit.offers_from else 'No'}")
 
 
 def run_postseason_tournaments():
