@@ -378,35 +378,29 @@ def dashboard_page():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("⏭️ SIM TO NEXT GAME", type="primary", use_container_width=True):
-                    # DEBUG: Show what's happening
-                    st.write(f"DEBUG - Current Week: {season.current_week}")
-                    st.write(f"DEBUG - Played games count: {len(season.played_games)}")
-                    st.write(f"DEBUG - Team record: {team.wins}-{team.losses}")
+                    # Get the team object from season.all_teams (ensure same instance)
+                    season_team = next((t for t in season.all_teams if t.name == team.name), team)
 
-                    next_game_before = season.get_next_game_for_team(team)
-                    if next_game_before:
-                        st.write(f"DEBUG - Next opponent: {next_game_before['opponent'].name} (Week {next_game_before['week']})")
+                    st.write(f"DEBUG - Before sim: Week={season.current_week}, Played={len(season.played_games)}, Record={team.wins}-{team.losses}")
+                    st.write(f"DEBUG - Played games: {list(season.played_games)[:5]}")  # Show first 5
 
-                    result = season.simulate_to_next_game(team)
+                    result = season.simulate_to_next_game(season_team)
                     if result:
                         st.session_state.last_results = [result]
-
                         st.write(f"DEBUG - Just played: {result['home_team']} vs {result['away_team']}")
-                        st.write(f"DEBUG - After game, played_games count: {len(season.played_games)}")
+                        st.write(f"DEBUG - After sim: Played={len(season.played_games)}")
 
                         # Check if team has more games this week
-                        next_game = season.get_next_game_for_team(team)
-
+                        next_game = season.get_next_game_for_team(season_team)
                         if next_game:
-                            st.write(f"DEBUG - Next game after this: {next_game['opponent'].name} (Week {next_game['week']})")
+                            st.write(f"DEBUG - Next game: {next_game['opponent'].name} at week {next_game['week']}")
                         else:
-                            st.write("DEBUG - No more games found")
+                            st.write("DEBUG - No next game found")
 
                         if next_game is None or next_game['week'] > season.current_week:
                             # No more games this week, advance to next week
-                            old_week = season.current_week
                             season.current_week += 1
-                            st.write(f"DEBUG - Advancing week from {old_week} to {season.current_week}")
+                            st.write(f"DEBUG - Advanced to week {season.current_week}")
                             st.session_state.recruiting_actions_remaining = 5
                             # Update recruit interest levels each week
                             if st.session_state.recruiting_class is not None:
