@@ -378,15 +378,35 @@ def dashboard_page():
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("⏭️ SIM TO NEXT GAME", type="primary", use_container_width=True):
+                    # DEBUG: Show what's happening
+                    st.write(f"DEBUG - Current Week: {season.current_week}")
+                    st.write(f"DEBUG - Played games count: {len(season.played_games)}")
+                    st.write(f"DEBUG - Team record: {team.wins}-{team.losses}")
+
+                    next_game_before = season.get_next_game_for_team(team)
+                    if next_game_before:
+                        st.write(f"DEBUG - Next opponent: {next_game_before['opponent'].name} (Week {next_game_before['week']})")
+
                     result = season.simulate_to_next_game(team)
                     if result:
                         st.session_state.last_results = [result]
 
+                        st.write(f"DEBUG - Just played: {result['home_team']} vs {result['away_team']}")
+                        st.write(f"DEBUG - After game, played_games count: {len(season.played_games)}")
+
                         # Check if team has more games this week
                         next_game = season.get_next_game_for_team(team)
+
+                        if next_game:
+                            st.write(f"DEBUG - Next game after this: {next_game['opponent'].name} (Week {next_game['week']})")
+                        else:
+                            st.write("DEBUG - No more games found")
+
                         if next_game is None or next_game['week'] > season.current_week:
                             # No more games this week, advance to next week
+                            old_week = season.current_week
                             season.current_week += 1
+                            st.write(f"DEBUG - Advancing week from {old_week} to {season.current_week}")
                             st.session_state.recruiting_actions_remaining = 5
                             # Update recruit interest levels each week
                             if st.session_state.recruiting_class is not None:
