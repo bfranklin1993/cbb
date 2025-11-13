@@ -406,6 +406,10 @@ def dashboard_page():
                             if st.session_state.recruiting_class is not None:
                                 st.session_state.recruiting_class.update_weekly_interest()
 
+                        # CRITICAL: Explicitly save season back to session state
+                        # This ensures played_games set is persisted
+                        st.session_state.current_season = season
+
                     st.rerun()
             with col2:
                 if st.button("⏩ SIM TO END", use_container_width=True):
@@ -413,6 +417,8 @@ def dashboard_page():
                     # Update recruit interest levels after simulating multiple weeks
                     if st.session_state.recruiting_class is not None:
                         st.session_state.recruiting_class.update_weekly_interest()
+                    # Save season back to session state
+                    st.session_state.current_season = season
                     st.rerun()
 
             # Recent results
