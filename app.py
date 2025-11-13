@@ -119,6 +119,7 @@ def init_session_state():
         st.session_state.game_initialized = True
         st.session_state.page = "dashboard"
         st.session_state.recruiting_class = None
+        st.session_state.played_games = set()  # Track played games in session state, not in Season object
 
 
 def main():
@@ -357,7 +358,14 @@ def dashboard_page():
     if not season:
         st.info("**PRE-SEASON** • Ready to start the season")
         if st.button("▶️ START SEASON", type="primary", use_container_width=True):
-            st.session_state.current_season = Season(st.session_state.all_teams, st.session_state.current_year)
+            # Reset played games for new season
+            st.session_state.played_games = set()
+            # Create season with reference to session_state played_games
+            st.session_state.current_season = Season(
+                st.session_state.all_teams,
+                st.session_state.current_year,
+                st.session_state.played_games  # Pass the set reference
+            )
             st.session_state.current_season.generate_schedule()
             st.rerun()
     else:
@@ -368,9 +376,9 @@ def dashboard_page():
                 run_postseason_tournaments()
         else:
             # DEBUG: Always show current state
-            st.error(f"🔍 STATE CHECK - Week: {season.current_week}/{season.total_weeks} | Games Played Tracker: {len(season.played_games)} | Your Record: {team.wins}-{team.losses}")
-            if len(season.played_games) > 0:
-                recent = list(season.played_games)[-3:]
+            st.error(f"🔍 STATE CHECK - Week: {season.current_week}/{season.total_weeks} | Games in Session: {len(st.session_state.played_games)} | Games in Season: {len(season.played_games)} | Your Record: {team.wins}-{team.losses}")
+            if len(st.session_state.played_games) > 0:
+                recent = list(st.session_state.played_games)[-3:]
                 st.error(f"Last 3 games in tracker: {recent}")
 
             # Show next game info

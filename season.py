@@ -12,14 +12,16 @@ from teams_data import get_conference_teams, CONFERENCES
 class Season:
     """Manages a college basketball season"""
 
-    def __init__(self, all_teams: List[Team], year: int = 2024):
+    def __init__(self, all_teams: List[Team], year: int = 2024, played_games_set: set = None):
         self.all_teams = all_teams
         self.year = year
         self.game_engine = GameEngine()
         self.schedule = []
         self.current_week = 0
         self.total_weeks = 18  # 18 weeks of regular season (Nov-Feb)
-        self.played_games = set()  # Track played games as (week, home_team_name, away_team_name) tuples
+        # Use external played_games set if provided (for Streamlit session persistence)
+        # Otherwise create a new one
+        self.played_games = played_games_set if played_games_set is not None else set()
 
     def generate_schedule(self):
         """Generate realistic schedule: Non-conf in Nov-Dec, Conference in Jan-Mar"""
