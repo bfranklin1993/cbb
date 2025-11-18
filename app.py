@@ -162,6 +162,8 @@ def main():
             league_page()
         elif st.session_state.page == "recruiting":
             recruiting_page()
+        elif st.session_state.page == "conference_tournament":
+            conference_tournament_page()
 
 
 def select_team_page():
@@ -372,8 +374,20 @@ def dashboard_page():
         # In season
         if season.current_week >= season.total_weeks:
             st.success("**REGULAR SEASON COMPLETE**")
-            if st.button("🏆 POSTSEASON", type="primary", use_container_width=True):
-                run_postseason_tournaments()
+
+            # Check if conference tournaments have been completed
+            if 'conference_tournaments_complete' not in st.session_state:
+                st.session_state.conference_tournaments_complete = False
+
+            if not st.session_state.conference_tournaments_complete:
+                # Conference Tournament Phase
+                if st.button("🏀 CONFERENCE TOURNAMENTS", type="primary", use_container_width=True):
+                    st.session_state.page = "conference_tournament"
+                    st.rerun()
+            else:
+                # NCAA/NIT Selection
+                if st.button("🏆 NCAA TOURNAMENT", type="primary", use_container_width=True):
+                    run_postseason_tournaments()
         else:
             # DEBUG: Always show current state
             st.error(f"🔍 STATE CHECK - Week: {season.current_week + 1}/{season.total_weeks} | Games in Session: {len(st.session_state.played_games)} | Games in Season: {len(season.played_games)} | Your Record: {team.wins}-{team.losses}")
@@ -1040,6 +1054,73 @@ def recruiting_page():
         st.caption(f"Scouted: {'Yes' if team.name in recruit.scouted_by else 'No'} • Visited: {visit_count}x • Offered: {'Yes' if team.name in recruit.offers_from else 'No'}")
 
 
+def conference_tournament_page():
+    """Conference Tournament page"""
+    team = st.session_state.player_team
+    season = st.session_state.current_season
+
+    st.markdown(f"## 🏀 {team.conference.upper()} TOURNAMENT")
+
+    # Get conference teams and seed them
+    conf_teams = [t for t in st.session_state.all_teams if t.conference == team.conference]
+    conf_teams.sort(key=lambda t: (t.conference_wins, t.wins, t.get_team_rating()), reverse=True)
+
+    # Find user's seed
+    user_seed = next((i+1 for i, t in enumerate(conf_teams) if t.name == team.name), None)
+
+    # Show seeding
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("YOUR SEED", f"#{user_seed}")
+        st.metric("CONFERENCE RECORD", f"{team.conference_wins}-{team.conference_losses}")
+    with col2:
+        st.metric("OVERALL RECORD", f"{team.wins}-{team.losses}")
+        st.metric("CONFERENCE", team.conference)
+
+    st.markdown("---")
+
+    # Show bracket seeding
+    st.markdown("### TOURNAMENT SEEDING")
+    for i, t in enumerate(conf_teams[:8], 1):
+        is_user = t.name == team.name
+        marker = "**👤 YOU**" if is_user else ""
+        st.caption(f"**#{i}** {t.name} ({t.conference_wins}-{t.conference_losses} conf, {t.wins}-{t.losses} overall) {marker}")
+
+    st.markdown("---")
+
+    # Tournament simulation button
+    if st.button("START TOURNAMENT", type="primary", use_container_width=True):
+        with st.spinner(f"Simulating {team.conference} Tournament..."):
+            from tournament import run_conference_tournaments
+
+            # Run all conference tournaments
+            conference_champions = run_conference_tournaments(
+                st.session_state.all_teams,
+                st.session_state.game_engine
+            )
+
+            # Store results
+            st.session_state.conference_champions = conference_champions
+            st.session_state.conference_tournaments_complete = True
+
+            # Check if user won
+            user_won = conference_champions[team.conference].name == team.name
+
+            if user_won:
+                st.balloons()
+                st.success(f"🏆 **CONFERENCE CHAMPION!** You won the {team.conference} Tournament!")
+                st.info("✓ Automatic NCAA Tournament bid secured!")
+            else:
+                champion_name = conference_champions[team.conference].name
+                st.info(f"**{team.conference} Champion:** {champion_name}")
+                st.caption("You'll need an at-large bid for the NCAA Tournament")
+
+            # Button to continue
+            if st.button("CONTINUE TO NCAA SELECTION", type="primary"):
+                st.session_state.page = "dashboard"
+                st.rerun()
+
+
 def run_postseason_tournaments():
     """Run postseason with selection show"""
     season = st.session_state.current_season
@@ -1051,21 +1132,38 @@ def run_postseason_tournaments():
 
     if st.session_state.postseason_stage == 'selection':
         # Selection Show
-        st.markdown("## 🏀 TOURNAMENT SELECTION SHOW")
+        st.markdown("## 🏀 NCAA TOURNAMENT SELECTION SHOW")
 
-        # Sort teams by record
+        # Get conference champions (auto-bids)
+        if 'conference_champions' in st.session_state:
+            auto_bid_teams = list(st.session_state.conference_champions.values())
+        else:
+            # Fallback if no conference tournaments were run
+            auto_bid_teams = []
+
+        # Sort all teams by record for at-large consideration
         sorted_teams = sorted(st.session_state.all_teams,
                              key=lambda t: (t.wins - t.losses, t.get_team_rating()),
                              reverse=True)
 
-        # Top 68 go to NCAA
-        ncaa_teams = sorted_teams[:68]
-        nit_teams = sorted_teams[68:100]
+        # At-large teams: Best remaining teams not already in via auto-bid
+        num_auto_bids = len(auto_bid_teams)
+        at_large_spots = 68 - num_auto_bids
+        at_large_candidates = [t for t in sorted_teams if t not in auto_bid_teams]
+        at_large_teams = at_large_candidates[:at_large_spots]
 
-        # Find user's team
+        # Combine for NCAA field
+        ncaa_teams = auto_bid_teams + at_large_teams
+
+        # NIT gets next 32 teams
+        nit_candidates = [t for t in sorted_teams if t not in ncaa_teams]
+        nit_teams = nit_candidates[:32]
+
+        # Find user's team status
         user_rank = next((i+1 for i, t in enumerate(sorted_teams) if t.name == team.name), None)
         user_in_ncaa = team in ncaa_teams
         user_in_nit = team in nit_teams
+        user_is_auto_bid = team in auto_bid_teams
 
         # Display selection
         col1, col2 = st.columns(2)
@@ -1074,7 +1172,11 @@ def run_postseason_tournaments():
             st.metric("YOUR RECORD", f"{team.wins}-{team.losses}")
         with col2:
             if user_in_ncaa:
-                st.success("**🏆 NCAA TOURNAMENT**")
+                if user_is_auto_bid:
+                    st.success("**🏆 NCAA TOURNAMENT (AUTO-BID)**")
+                    st.caption(f"✓ {team.conference} Tournament Champion")
+                else:
+                    st.success("**🏆 NCAA TOURNAMENT (AT-LARGE)**")
                 seed = ncaa_teams.index(team) + 1
                 st.metric("SEED", f"#{seed}")
             elif user_in_nit:
@@ -1083,6 +1185,13 @@ def run_postseason_tournaments():
                 st.metric("SEED", f"#{seed}")
             else:
                 st.error("**DID NOT QUALIFY**")
+
+        st.markdown("---")
+
+        # Show selection breakdown
+        st.markdown(f"### SELECTION BREAKDOWN")
+        st.caption(f"**Automatic Bids:** {num_auto_bids} conference champions")
+        st.caption(f"**At-Large Bids:** {at_large_spots} teams selected by committee")
 
         st.markdown("---")
 

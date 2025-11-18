@@ -60,6 +60,134 @@ class Tournament:
         return matchups
 
 
+class ConferenceTournament(Tournament):
+    """Conference Tournament - varies by conference size"""
+
+    def __init__(self, conference_name: str, teams: List[Team], game_engine: GameEngine):
+        super().__init__(f"{conference_name} Tournament", teams, game_engine)
+        self.conference_name = conference_name
+
+    def simulate(self) -> Team:
+        """Simulate conference tournament based on number of teams"""
+        # Seed by conference record, then overall record
+        self.teams.sort(key=lambda t: (t.conference_wins, t.wins, t.get_team_rating()), reverse=True)
+
+        num_teams = len(self.teams)
+
+        # Determine tournament format based on conference size
+        if num_teams <= 8:
+            # Small conference: All teams play, quarterfinals start
+            return self._simulate_8_team_bracket()
+        elif num_teams <= 12:
+            # Medium conference: Top 8-12 teams
+            tournament_teams = self.teams[:min(12, num_teams)]
+            return self._simulate_12_team_bracket(tournament_teams)
+        else:
+            # Large conference: Top 12-14 teams
+            tournament_teams = self.teams[:min(14, num_teams)]
+            return self._simulate_14_team_bracket(tournament_teams)
+
+    def _simulate_8_team_bracket(self) -> Team:
+        """8 team bracket: Quarterfinals -> Semifinals -> Final"""
+        # Quarterfinals
+        qf_matchups = [
+            (self.teams[0], self.teams[7]),
+            (self.teams[1], self.teams[6]),
+            (self.teams[2], self.teams[5]),
+            (self.teams[3], self.teams[4])
+        ]
+        sf_teams = self.simulate_round(qf_matchups, "QUARTERFINALS")
+
+        # Semifinals
+        sf_matchups = self.create_matchups(sf_teams)
+        final_teams = self.simulate_round(sf_matchups, "SEMIFINALS")
+
+        # Championship
+        championship = [(final_teams[0], final_teams[1])]
+        champions = self.simulate_round(championship, "CHAMPIONSHIP")
+
+        self.champion = champions[0]
+        return self.champion
+
+    def _simulate_12_team_bracket(self, teams: List[Team]) -> Team:
+        """12 team bracket: Top 4 get byes, Round of 12 -> QF -> SF -> Final"""
+        # Top 4 get first round byes
+        bye_teams = teams[:4]
+        first_round_teams = teams[4:12]
+
+        # First Round (8 teams play, 4 advance)
+        fr_matchups = [
+            (first_round_teams[0], first_round_teams[7]),  # 5 vs 12
+            (first_round_teams[1], first_round_teams[6]),  # 6 vs 11
+            (first_round_teams[2], first_round_teams[5]),  # 7 vs 10
+            (first_round_teams[3], first_round_teams[4])   # 8 vs 9
+        ]
+        fr_winners = self.simulate_round(fr_matchups, "FIRST ROUND")
+
+        # Quarterfinals (byes + first round winners)
+        qf_matchups = [
+            (bye_teams[0], fr_winners[3]),  # 1 vs 8/9 winner
+            (bye_teams[1], fr_winners[2]),  # 2 vs 7/10 winner
+            (bye_teams[2], fr_winners[1]),  # 3 vs 6/11 winner
+            (bye_teams[3], fr_winners[0])   # 4 vs 5/12 winner
+        ]
+        sf_teams = self.simulate_round(qf_matchups, "QUARTERFINALS")
+
+        # Semifinals
+        sf_matchups = self.create_matchups(sf_teams)
+        final_teams = self.simulate_round(sf_matchups, "SEMIFINALS")
+
+        # Championship
+        championship = [(final_teams[0], final_teams[1])]
+        champions = self.simulate_round(championship, "CHAMPIONSHIP")
+
+        self.champion = champions[0]
+        return self.champion
+
+    def _simulate_14_team_bracket(self, teams: List[Team]) -> Team:
+        """14 team bracket: Top 2 get double byes"""
+        # Top 2 get second round byes
+        double_bye_teams = teams[:2]
+        single_bye_teams = teams[2:6]
+        first_round_teams = teams[6:14]
+
+        # First Round
+        fr_matchups = [
+            (first_round_teams[0], first_round_teams[7]),  # 7 vs 14
+            (first_round_teams[1], first_round_teams[6]),  # 8 vs 13
+            (first_round_teams[2], first_round_teams[5]),  # 9 vs 12
+            (first_round_teams[3], first_round_teams[4])   # 10 vs 11
+        ]
+        fr_winners = self.simulate_round(fr_matchups, "FIRST ROUND")
+
+        # Second Round (single byes + first round winners)
+        r2_matchups = [
+            (single_bye_teams[0], fr_winners[3]),  # 3 vs 10/11
+            (single_bye_teams[1], fr_winners[2]),  # 4 vs 9/12
+            (single_bye_teams[2], fr_winners[1]),  # 5 vs 8/13
+            (single_bye_teams[3], fr_winners[0])   # 6 vs 7/14
+        ]
+        r2_winners = self.simulate_round(r2_matchups, "SECOND ROUND")
+
+        # Quarterfinals (double byes + second round winners)
+        qf_matchups = [
+            (double_bye_teams[0], r2_winners[3]),  # 1 vs lowest seed
+            (double_bye_teams[1], r2_winners[2])   # 2 vs next lowest
+        ] + self.create_matchups(r2_winners[:2])
+        sf_teams = self.simulate_round(qf_matchups, "QUARTERFINALS")
+
+        # Semifinals
+        sf_matchups = self.create_matchups(sf_teams)
+        final_teams = self.simulate_round(sf_matchups, "SEMIFINALS")
+
+        # Championship
+        championship = [(final_teams[0], final_teams[1])]
+        champions = self.simulate_round(championship, "CHAMPIONSHIP")
+
+        self.champion = champions[0]
+        return self.champion
+
+
 class NCAABracket(Tournament):
     """NCAA Tournament (March Madness) - 68 teams"""
 
@@ -196,3 +324,38 @@ def run_postseason(all_teams: List[Team], game_engine: GameEngine):
         'ncaa_champion': ncaa_champion,
         'nit_champion': nit_champion
     }
+
+
+def run_conference_tournaments(all_teams: List[Team], game_engine: GameEngine) -> dict:
+    """Run all conference tournaments and return champions"""
+    from teams_data import CONFERENCES
+
+    conference_champions = {}
+
+    # Group teams by conference
+    conferences_teams = {}
+    for team in all_teams:
+        if team.conference not in conferences_teams:
+            conferences_teams[team.conference] = []
+        conferences_teams[team.conference].append(team)
+
+    # Run tournament for each conference
+    for conference_name in sorted(CONFERENCES.keys()):
+        if conference_name not in conferences_teams:
+            continue
+
+        conf_teams = conferences_teams[conference_name]
+        if len(conf_teams) < 4:  # Need at least 4 teams for a tournament
+            # Just take the regular season champion
+            conf_teams.sort(key=lambda t: (t.conference_wins, t.wins), reverse=True)
+            conference_champions[conference_name] = conf_teams[0]
+            continue
+
+        # Run conference tournament
+        tournament = ConferenceTournament(conference_name, conf_teams, game_engine)
+        champion = tournament.simulate()
+        conference_champions[conference_name] = champion
+
+        print(f"\n{conference_name} Champion: {champion.name} ({champion.conference_wins}-{champion.conference_losses} conf, {champion.wins}-{champion.losses} overall)")
+
+    return conference_champions
