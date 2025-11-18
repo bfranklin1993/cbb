@@ -350,18 +350,21 @@ class Season:
 
     def simulate_to_next_game(self, team: Team) -> dict:
         """Simulate up to and including the team's next game
-        Also simulates all other games in that week to keep standings accurate"""
+        Also simulates all other teams' games in that week to keep standings accurate,
+        but does NOT simulate the user's future games in that same week"""
         next_game = self.get_next_game_for_team(team)
         if not next_game:
             return None
 
         target_week = next_game['week']
+        target_home = next_game['home_team'].name
+        target_away = next_game['away_team'].name
 
         # If the target week is ahead of current week, simulate all intervening weeks
         while self.current_week < target_week:
             self.simulate_week()
 
-        # Now we're in the target week - simulate ALL games up to and including the team's game
+        # Now we're in the target week - simulate all games EXCEPT user's other games
         week_games = self.schedule[target_week]
         user_game_result = None
 
@@ -373,10 +376,20 @@ class Season:
                 home_team, away_team, is_conference = game_tuple
                 day_offset = 0
 
+            # Check if this is the specific target game
+            is_target_game = (home_team.name == target_home and away_team.name == target_away)
+
+            # Check if this is any user game
+            is_user_game = (home_team.name == team.name or away_team.name == team.name)
+
             # Check if this game has already been played
             game_key = (target_week, home_team.name, away_team.name)
             if game_key in self.played_games:
                 continue  # Skip already played games
+
+            # Skip user's other games in this week (but not the target game)
+            if is_user_game and not is_target_game:
+                continue  # Save this user game for a future click
 
             # Mark this game as played
             self.played_games.add(game_key)
@@ -386,8 +399,8 @@ class Season:
                 home_team, away_team, is_conference
             )
 
-            # If this is the user's game, save it to return
-            if home_team.name == team.name or away_team.name == team.name:
+            # If this is the target game, save it to return
+            if is_target_game:
                 user_game_result = result
 
         return user_game_result
