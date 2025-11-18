@@ -226,8 +226,12 @@ class Season:
                 home_team, away_team, is_conference = game_tuple
                 day_offset = 0
 
-            # Mark this game as played
+            # Check if this game has already been played
             game_key = (self.current_week, home_team.name, away_team.name)
+            if game_key in self.played_games:
+                continue  # Skip already played games
+
+            # Mark this game as played
             self.played_games.add(game_key)
 
             result = self.game_engine.simulate_game_with_details(
@@ -370,14 +374,18 @@ class Season:
 
             # Check if this is the team's game
             if home_team.name == team.name or away_team.name == team.name:
+                # Check if this game has already been played
+                game_key = (target_week, home_team.name, away_team.name)
+                if game_key in self.played_games:
+                    continue  # Skip already played games
+
+                # Mark this game as played
+                self.played_games.add(game_key)
+
                 # Simulate only this specific game
                 result = self.game_engine.simulate_game_with_details(
                     home_team, away_team, is_conference
                 )
-
-                # Mark this game as played
-                game_key = (target_week, home_team.name, away_team.name)
-                self.played_games.add(game_key)
 
                 return result
 
