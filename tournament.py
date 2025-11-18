@@ -76,22 +76,30 @@ class ConferenceTournament(Tournament):
 
         # Determine tournament format based on conference size
         if num_teams <= 8:
-            # Small conference: All teams play, quarterfinals start
+            # Small conference: All teams play, 8-team bracket
             return self._simulate_8_team_bracket()
+        elif num_teams <= 11:
+            # Medium conference (9-11 teams): Top 8 play in 8-team bracket
+            # This is realistic - not all conference members qualify for tournament
+            tournament_teams = self.teams[:8]
+            return self._simulate_8_team_bracket_with_teams(tournament_teams)
         else:
-            # Medium/Large conference: Top 12 teams maximum (like ACC, Big Ten, etc.)
-            # Most conferences limit their tournament even if they have 14-18 members
-            tournament_teams = self.teams[:min(12, num_teams)]
+            # Large conference (12+ teams): Top 12 play in 12-team bracket
+            tournament_teams = self.teams[:12]
             return self._simulate_12_team_bracket(tournament_teams)
 
     def _simulate_8_team_bracket(self) -> Team:
-        """8 team bracket: Quarterfinals -> Semifinals -> Final"""
+        """8 team bracket using self.teams: Quarterfinals -> Semifinals -> Final"""
+        return self._simulate_8_team_bracket_with_teams(self.teams)
+
+    def _simulate_8_team_bracket_with_teams(self, teams: List[Team]) -> Team:
+        """8 team bracket with custom team list: Quarterfinals -> Semifinals -> Final"""
         # Quarterfinals
         qf_matchups = [
-            (self.teams[0], self.teams[7]),
-            (self.teams[1], self.teams[6]),
-            (self.teams[2], self.teams[5]),
-            (self.teams[3], self.teams[4])
+            (teams[0], teams[7]),
+            (teams[1], teams[6]),
+            (teams[2], teams[5]),
+            (teams[3], teams[4])
         ]
         sf_teams = self.simulate_round(qf_matchups, "QUARTERFINALS")
 

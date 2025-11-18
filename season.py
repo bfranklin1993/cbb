@@ -99,12 +99,12 @@ class Season:
                                 home_games[team2.name] += 1
                                 away_games[team1.name] += 1
 
-        # Generate non-conference games - 9-12 games per team (realistic)
+        # Generate non-conference games - 7-10 games per team (realistic)
         for team in self.all_teams:
             other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
-            # Each team plays 9-12 non-conference games
-            num_non_conf = min(random.randint(9, 12), len(other_conf_teams))
+            # Each team plays 7-10 non-conference games
+            num_non_conf = min(random.randint(7, 10), len(other_conf_teams))
             opponents = random.sample(other_conf_teams, num_non_conf)
 
             for opponent in opponents:
