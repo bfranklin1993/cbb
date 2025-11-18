@@ -1059,66 +1059,85 @@ def conference_tournament_page():
     team = st.session_state.player_team
     season = st.session_state.current_season
 
+    # Initialize conference tournament stage
+    if 'conf_tourney_stage' not in st.session_state:
+        st.session_state.conf_tourney_stage = 'seeding'
+
     st.markdown(f"## 🏀 {team.conference.upper()} TOURNAMENT")
 
-    # Get conference teams and seed them
-    conf_teams = [t for t in st.session_state.all_teams if t.conference == team.conference]
-    conf_teams.sort(key=lambda t: (t.conference_wins, t.wins, t.get_team_rating()), reverse=True)
+    if st.session_state.conf_tourney_stage == 'seeding':
+        # Get conference teams and seed them
+        conf_teams = [t for t in st.session_state.all_teams if t.conference == team.conference]
+        conf_teams.sort(key=lambda t: (t.conference_wins, t.wins, t.get_team_rating()), reverse=True)
 
-    # Find user's seed
-    user_seed = next((i+1 for i, t in enumerate(conf_teams) if t.name == team.name), None)
+        # Find user's seed
+        user_seed = next((i+1 for i, t in enumerate(conf_teams) if t.name == team.name), None)
 
-    # Show seeding
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("YOUR SEED", f"#{user_seed}")
-        st.metric("CONFERENCE RECORD", f"{team.conference_wins}-{team.conference_losses}")
-    with col2:
-        st.metric("OVERALL RECORD", f"{team.wins}-{team.losses}")
-        st.metric("CONFERENCE", team.conference)
+        # Show seeding
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("YOUR SEED", f"#{user_seed}")
+            st.metric("CONFERENCE RECORD", f"{team.conference_wins}-{team.conference_losses}")
+        with col2:
+            st.metric("OVERALL RECORD", f"{team.wins}-{team.losses}")
+            st.metric("CONFERENCE", team.conference)
 
-    st.markdown("---")
+        st.markdown("---")
 
-    # Show bracket seeding
-    st.markdown("### TOURNAMENT SEEDING")
-    for i, t in enumerate(conf_teams[:8], 1):
-        is_user = t.name == team.name
-        marker = "**👤 YOU**" if is_user else ""
-        st.caption(f"**#{i}** {t.name} ({t.conference_wins}-{t.conference_losses} conf, {t.wins}-{t.losses} overall) {marker}")
+        # Show bracket seeding
+        st.markdown("### TOURNAMENT SEEDING")
+        num_to_show = min(12, len(conf_teams))
+        for i, t in enumerate(conf_teams[:num_to_show], 1):
+            is_user = t.name == team.name
+            marker = "**👤 YOU**" if is_user else ""
+            st.caption(f"**#{i}** {t.name} ({t.conference_wins}-{t.conference_losses} conf, {t.wins}-{t.losses} overall) {marker}")
 
-    st.markdown("---")
+        st.markdown("---")
 
-    # Tournament simulation button
-    if st.button("START TOURNAMENT", type="primary", use_container_width=True):
-        with st.spinner(f"Simulating {team.conference} Tournament..."):
-            from tournament import run_conference_tournaments
+        # Tournament simulation button
+        if st.button("START TOURNAMENT", type="primary", use_container_width=True):
+            with st.spinner(f"Simulating {team.conference} Tournament..."):
+                from tournament import run_conference_tournaments
 
-            # Run all conference tournaments
-            conference_champions = run_conference_tournaments(
-                st.session_state.all_teams,
-                st.session_state.game_engine
-            )
+                # Run all conference tournaments
+                conference_champions = run_conference_tournaments(
+                    st.session_state.all_teams,
+                    st.session_state.game_engine
+                )
 
-            # Store results
-            st.session_state.conference_champions = conference_champions
-            st.session_state.conference_tournaments_complete = True
-
-            # Check if user won
-            user_won = conference_champions[team.conference].name == team.name
-
-            if user_won:
-                st.balloons()
-                st.success(f"🏆 **CONFERENCE CHAMPION!** You won the {team.conference} Tournament!")
-                st.info("✓ Automatic NCAA Tournament bid secured!")
-            else:
-                champion_name = conference_champions[team.conference].name
-                st.info(f"**{team.conference} Champion:** {champion_name}")
-                st.caption("You'll need an at-large bid for the NCAA Tournament")
-
-            # Button to continue
-            if st.button("CONTINUE TO NCAA SELECTION", type="primary"):
-                st.session_state.page = "dashboard"
+                # Store results
+                st.session_state.conference_champions = conference_champions
+                st.session_state.conference_tournaments_complete = True
+                st.session_state.conf_tourney_stage = 'results'
                 st.rerun()
+
+    elif st.session_state.conf_tourney_stage == 'results':
+        # Show results
+        champion = st.session_state.conference_champions[team.conference]
+        user_won = champion.name == team.name
+
+        if user_won:
+            st.balloons()
+            st.success(f"🏆 **CONFERENCE CHAMPION!** You won the {team.conference} Tournament!")
+            st.info("✓ Automatic NCAA Tournament bid secured!")
+        else:
+            st.info(f"**{team.conference} Champion:** {champion.name}")
+            st.caption("You'll need an at-large bid for the NCAA Tournament")
+
+        # Show all conference champions
+        st.markdown("---")
+        st.markdown("### ALL CONFERENCE CHAMPIONS")
+        for conf_name in sorted(st.session_state.conference_champions.keys())[:10]:
+            champ = st.session_state.conference_champions[conf_name]
+            st.caption(f"**{conf_name}:** {champ.name} ({champ.wins}-{champ.losses})")
+
+        st.markdown("---")
+
+        # Button to continue
+        if st.button("CONTINUE TO NCAA SELECTION", type="primary", use_container_width=True):
+            st.session_state.conf_tourney_stage = None  # Reset for next season
+            st.session_state.page = "dashboard"
+            st.rerun()
 
 
 def run_postseason_tournaments():

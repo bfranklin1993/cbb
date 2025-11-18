@@ -36,86 +36,65 @@ class Season:
             conf_teams = [t for t in self.all_teams if t.conference == conference]
             conf_size = len(conf_teams)
 
-            # Track home/away balance per team
-            home_games = {team.name: 0 for team in conf_teams}
-            away_games = {team.name: 0 for team in conf_teams}
+            if conf_size < 2:
+                continue
 
-            # Determine number of conference games based on conference size
-            if conf_size >= 16:
-                # Large conferences: 18-20 games (like SEC, ACC, Big Ten)
-                target_conf_games = 20 if conf_size >= 17 else 19
-            elif conf_size >= 10:
-                # Medium conferences: 18-20 games
-                target_conf_games = 19
+            # Determine games per team based on conference size
+            if conf_size >= 10:
+                # Medium/large conferences: Play everyone twice (home and away)
+                games_per_team = (conf_size - 1) * 2  # Everyone twice
             else:
-                # Small conferences: Play everyone home and away
-                target_conf_games = (conf_size - 1) * 2
+                # Small conferences: Play everyone twice
+                games_per_team = (conf_size - 1) * 2
 
-            # Play each conference opponent at least once
-            for i, team1 in enumerate(conf_teams):
-                for team2 in conf_teams[i+1:]:
-                    matchup = tuple(sorted([team1.name, team2.name]))
-
-                    if matchup not in scheduled_matchups:
-                        # Decide home/away based on current balance
-                        team1_home_ratio = home_games[team1.name] / max(home_games[team1.name] + away_games[team1.name], 1)
-                        team2_home_ratio = home_games[team2.name] / max(home_games[team2.name] + away_games[team2.name], 1)
-
-                        # Team with fewer home games gets home court
-                        if team1_home_ratio < team2_home_ratio:
+            # Create home-and-away round robin
+            for team1 in conf_teams:
+                for team2 in conf_teams:
+                    if team1.name != team2.name:
+                        matchup_key = f"{team1.name}_vs_{team2.name}"
+                        if matchup_key not in scheduled_matchups:
                             conference_games.append((team1, team2, True))
-                            home_games[team1.name] += 1
-                            away_games[team2.name] += 1
-                        else:
-                            conference_games.append((team2, team1, True))
-                            home_games[team2.name] += 1
-                            away_games[team1.name] += 1
-                        scheduled_matchups.add(matchup)
+                            scheduled_matchups.add(matchup_key)
 
-            # Add return games to reach target conference games, maintaining balance
-            games_per_team_so_far = conf_size - 1
-            if games_per_team_so_far < target_conf_games:
-                # Calculate how many return games needed
-                return_games_needed = (target_conf_games - games_per_team_so_far) // 2
+        # Generate non-conference games - 6-9 games per team
+        non_conf_count = {}
+        for team in self.all_teams:
+            non_conf_count[team.name] = 0
 
-                # Add return games for random matchups, maintaining balance
-                for i, team1 in enumerate(conf_teams):
-                    if return_games_needed > 0:
-                        # Select random opponents for return games
-                        num_return = min(return_games_needed, len(conf_teams) - 1)
-                        opponents = random.sample([t for t in conf_teams if t != team1], num_return)
-
-                        for team2 in opponents:
-                            # Decide home/away based on balance
-                            team1_home_ratio = home_games[team1.name] / max(home_games[team1.name] + away_games[team1.name], 1)
-                            team2_home_ratio = home_games[team2.name] / max(home_games[team2.name] + away_games[team2.name], 1)
-
-                            if team1_home_ratio < team2_home_ratio:
-                                conference_games.append((team1, team2, True))
-                                home_games[team1.name] += 1
-                                away_games[team2.name] += 1
-                            else:
-                                conference_games.append((team2, team1, True))
-                                home_games[team2.name] += 1
-                                away_games[team1.name] += 1
-
-        # Generate non-conference games - 7-10 games per team (realistic)
         for team in self.all_teams:
             other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
-            # Each team plays 7-10 non-conference games
-            num_non_conf = min(random.randint(7, 10), len(other_conf_teams))
-            opponents = random.sample(other_conf_teams, num_non_conf)
+            # Target 6-9 non-conference games per team
+            target_nc = random.randint(6, 9)
+            current_nc = non_conf_count[team.name]
+
+            if current_nc >= target_nc:
+                continue
+
+            num_needed = target_nc - current_nc
+            available_opponents = [t for t in other_conf_teams if non_conf_count[t.name] < 9]
+
+            if len(available_opponents) == 0:
+                continue
+
+            num_to_schedule = min(num_needed, len(available_opponents))
+            opponents = random.sample(available_opponents, num_to_schedule)
 
             for opponent in opponents:
-                matchup = tuple(sorted([team.name, opponent.name]))
+                # Use a directional key to prevent duplicates
+                matchup_key = f"{team.name}_vs_{opponent.name}"
+                reverse_key = f"{opponent.name}_vs_{team.name}"
 
-                if matchup not in scheduled_matchups:
+                if matchup_key not in scheduled_matchups and reverse_key not in scheduled_matchups:
                     if random.random() < 0.5:
                         non_conference_games.append((team, opponent, False))
+                        scheduled_matchups.add(matchup_key)
                     else:
                         non_conference_games.append((opponent, team, False))
-                    scheduled_matchups.add(matchup)
+                        scheduled_matchups.add(reverse_key)
+
+                    non_conf_count[team.name] += 1
+                    non_conf_count[opponent.name] += 1
 
         # Distribute games: Non-conf in weeks 1-10 (Nov-Dec), Conference in weeks 11-20 (Jan-Mar)
         random.shuffle(non_conference_games)
