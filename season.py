@@ -18,7 +18,7 @@ class Season:
         self.game_engine = GameEngine()
         self.schedule = []
         self.current_week = 0
-        self.total_weeks = 18  # 18 weeks of regular season (Nov-Feb)
+        self.total_weeks = 20  # 20 weeks of regular season (early Nov - early Mar)
         # Use external played_games set if provided (for Streamlit session persistence)
         # Otherwise create a new one
         self.played_games = played_games_set if played_games_set is not None else set()
@@ -99,12 +99,12 @@ class Season:
                                 home_games[team2.name] += 1
                                 away_games[team1.name] += 1
 
-        # Generate non-conference games - 5-7 games per team
+        # Generate non-conference games - 9-12 games per team (realistic)
         for team in self.all_teams:
             other_conf_teams = [t for t in self.all_teams if t.conference != team.conference]
 
-            # Each team plays 5-7 non-conference games
-            num_non_conf = min(random.randint(5, 7), len(other_conf_teams))
+            # Each team plays 9-12 non-conference games
+            num_non_conf = min(random.randint(9, 12), len(other_conf_teams))
             opponents = random.sample(other_conf_teams, num_non_conf)
 
             for opponent in opponents:
@@ -117,15 +117,15 @@ class Season:
                         non_conference_games.append((opponent, team, False))
                     scheduled_matchups.add(matchup)
 
-        # Distribute games: Non-conf in weeks 1-8 (Nov-Dec), Conference in weeks 9-18 (Jan-Mar)
+        # Distribute games: Non-conf in weeks 1-10 (Nov-Dec), Conference in weeks 11-20 (Jan-Mar)
         random.shuffle(non_conference_games)
         random.shuffle(conference_games)
 
-        # Schedule non-conference games in weeks 1-8
+        # Schedule non-conference games in weeks 1-10
         for game in non_conference_games:
             home_team, away_team, is_conf = game
 
-            for week_idx in range(0, 8):  # Weeks 1-8 (Nov-Dec)
+            for week_idx in range(0, 10):  # Weeks 1-10 (Nov-Dec)
                 week_teams = {}
                 week_team_days = {}  # Track which days teams are playing
                 for g in self.schedule[week_idx]:
@@ -165,11 +165,11 @@ class Season:
                         self.schedule[week_idx].append((home_team, away_team, is_conf, day_offset))
                         break
 
-        # Schedule conference games in weeks 9-18
+        # Schedule conference games in weeks 11-20
         for game in conference_games:
             home_team, away_team, is_conf = game
 
-            for week_idx in range(8, 18):  # Weeks 9-18 (Jan-Mar)
+            for week_idx in range(10, 20):  # Weeks 11-20 (Jan-Mar)
                 week_teams = {}
                 week_team_days = {}  # Track which days teams are playing
                 for g in self.schedule[week_idx]:
