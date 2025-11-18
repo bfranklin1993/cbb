@@ -350,7 +350,7 @@ class Season:
 
     def simulate_to_next_game(self, team: Team) -> dict:
         """Simulate up to and including the team's next game
-        Does NOT advance current_week - that should only happen when ALL games in week are done"""
+        Also simulates all other games in that week to keep standings accurate"""
         next_game = self.get_next_game_for_team(team)
         if not next_game:
             return None
@@ -361,8 +361,9 @@ class Season:
         while self.current_week < target_week:
             self.simulate_week()
 
-        # Now we're in the target week - find and simulate ONLY this team's specific game
+        # Now we're in the target week - simulate ALL games up to and including the team's game
         week_games = self.schedule[target_week]
+        user_game_result = None
 
         for game_tuple in week_games:
             # Handle both old (3-tuple) and new (4-tuple with day_offset) formats
@@ -372,24 +373,24 @@ class Season:
                 home_team, away_team, is_conference = game_tuple
                 day_offset = 0
 
-            # Check if this is the team's game
+            # Check if this game has already been played
+            game_key = (target_week, home_team.name, away_team.name)
+            if game_key in self.played_games:
+                continue  # Skip already played games
+
+            # Mark this game as played
+            self.played_games.add(game_key)
+
+            # Simulate the game
+            result = self.game_engine.simulate_game_with_details(
+                home_team, away_team, is_conference
+            )
+
+            # If this is the user's game, save it to return
             if home_team.name == team.name or away_team.name == team.name:
-                # Check if this game has already been played
-                game_key = (target_week, home_team.name, away_team.name)
-                if game_key in self.played_games:
-                    continue  # Skip already played games
+                user_game_result = result
 
-                # Mark this game as played
-                self.played_games.add(game_key)
-
-                # Simulate only this specific game
-                result = self.game_engine.simulate_game_with_details(
-                    home_team, away_team, is_conference
-                )
-
-                return result
-
-        return None
+        return user_game_result
 
     def week_to_date(self, week: int, day_offset: int = 0) -> str:
         """Convert week number and day offset to a calendar date string
