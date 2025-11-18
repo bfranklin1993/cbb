@@ -78,14 +78,11 @@ class ConferenceTournament(Tournament):
         if num_teams <= 8:
             # Small conference: All teams play, quarterfinals start
             return self._simulate_8_team_bracket()
-        elif num_teams <= 12:
-            # Medium conference: Top 8-12 teams
+        else:
+            # Medium/Large conference: Top 12 teams maximum (like ACC, Big Ten, etc.)
+            # Most conferences limit their tournament even if they have 14-18 members
             tournament_teams = self.teams[:min(12, num_teams)]
             return self._simulate_12_team_bracket(tournament_teams)
-        else:
-            # Large conference: Top 12-14 teams
-            tournament_teams = self.teams[:min(14, num_teams)]
-            return self._simulate_14_team_bracket(tournament_teams)
 
     def _simulate_8_team_bracket(self) -> Team:
         """8 team bracket: Quarterfinals -> Semifinals -> Final"""
