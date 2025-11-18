@@ -100,22 +100,46 @@ st.session_state.recruiting_class   # RecruitingClass
 st.session_state.recruiting_actions_remaining  # int (5 per week)
 ```
 
-### Known Bug Pattern: Duplicate Game Simulation
+### CRITICAL BUG: Duplicate Game Simulation (NOT FIXED)
 
-**Problem:** Games being simulated multiple times due to Streamlit reruns.
+**Problem:** Games are simulated multiple times due to Streamlit reruns.
 
-**Solution:** Always store `played_games` directly in `st.session_state` and pass by reference:
+**Root Cause:** The simulation methods in `season.py` do NOT check if games have been played before simulating them.
 
+**Bug Location:**
+- `season.py:221-236` - `simulate_week()` adds to `played_games` AFTER simulating, never checks BEFORE
+- `season.py:372-382` - `simulate_to_next_game()` simulates without checking if game already played
+
+**Current (Broken) Code:**
 ```python
-# CORRECT (see app.py:122, 362-368, 424-426)
-if 'played_games' not in st.session_state:
-    st.session_state.played_games = set()
+# season.py:230-235
+game_key = (self.current_week, home_team.name, away_team.name)
+self.played_games.add(game_key)  # Adds AFTER simulating
 
-season = Season(teams, game_engine)
-season.played_games = st.session_state.played_games  # Pass by reference
+result = self.game_engine.simulate_game_with_details(
+    home_team, away_team, is_conference
+)
 ```
 
-**Git History:** Recent commits (a61190a, b3d28f8, 1cc82a6) show fixes for this issue.
+**Required Fix:**
+```python
+# Check BEFORE simulating
+game_key = (self.current_week, home_team.name, away_team.name)
+if game_key in self.played_games:
+    continue  # Skip already played games
+
+self.played_games.add(game_key)
+result = self.game_engine.simulate_game_with_details(
+    home_team, away_team, is_conference
+)
+```
+
+**Infrastructure in Place (app.py:122, 362-368):**
+- `played_games` stored in `st.session_state` ✓
+- Passed by reference to Season constructor ✓
+- But simulation methods don't use it to prevent duplicates ✗
+
+**Git History:** Recent commits (a61190a, b3d28f8, 1cc82a6) attempted to fix this but the simulation logic still doesn't check before simulating.
 
 ## Development Workflows
 
@@ -306,10 +330,12 @@ Prestige affects:
 **Workaround:** No save/load system implemented
 **Future:** Add pickle/JSON serialization for save games
 
-### Duplicate Game Simulation
+### Duplicate Game Simulation (ACTIVE BUG)
 
-**Issue:** Streamlit reruns can cause duplicate game simulation
-**Fix:** Always use `st.session_state.played_games` set (see app.py:362-368)
+**Issue:** Games are simulated multiple times on Streamlit reruns
+**Status:** NOT FIXED - Infrastructure in place but simulation logic doesn't check before simulating
+**Fix Required:** Add `if game_key in self.played_games: continue` in season.py:221-236 and season.py:372-382
+**See:** "CRITICAL BUG" section above for detailed fix
 
 ### Recruiting Commitment Timing
 
@@ -355,6 +381,8 @@ Prestige affects:
 **Game Simulation:**
 - game_engine.py:87-120 - simulate_game() core algorithm
 - game_engine.py:45-86 - System matchup bonuses
+- **BUG:** season.py:221-236 - simulate_week() doesn't check played_games before simulating
+- **BUG:** season.py:372-382 - simulate_to_next_game() doesn't check played_games before simulating
 
 **Recruiting Commitment:**
 - recruiting.py:450-480 - Commitment logic and timing
@@ -469,7 +497,9 @@ Prestige affects:
 → Initialize in app.py initialization block (lines 90-130)
 
 **"Games simulating multiple times"**
-→ Check played_games set is in session_state AND passed to Season
+→ KNOWN BUG: season.py simulation methods don't check played_games before simulating
+→ Workaround: Don't click "Sim Week" or "Sim to Next Game" multiple times
+→ Proper fix: Add `if game_key in self.played_games: continue` in simulate_week() and simulate_to_next_game()
 
 **"Recruits won't commit"**
 → Check week number (must be 4-6 or 16+) and interest level (85-95+)
