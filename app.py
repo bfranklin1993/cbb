@@ -253,16 +253,16 @@ def dashboard_page():
                 # No games yet - pure rating
                 return t.get_team_rating()
             else:
-                # Blend win% and rating - rating influence decreases as games increase
+                # Blend win% and rating - record dominates after a few games
                 win_pct = t.wins / t.games_played
                 rating = t.get_team_rating()
 
-                # Weight: early season ratings matter, late season record matters
-                # At 1 game: 80% rating, 20% record
-                # At 10 games: 50% rating, 50% record
-                # At 20+ games: 20% rating, 80% record
-                games_factor = min(t.games_played / 25, 1.0)
-                record_weight = 0.2 + (games_factor * 0.6)
+                # Weight: record should matter much more than pre-season rating
+                # At 1 game: 50% rating, 50% record
+                # At 5 games: 20% rating, 80% record
+                # At 10+ games: 10% rating, 90% record
+                games_factor = min(t.games_played / 10, 1.0)
+                record_weight = 0.5 + (games_factor * 0.4)
                 rating_weight = 1.0 - record_weight
 
                 # Convert win% to 0-100 scale to match rating scale
