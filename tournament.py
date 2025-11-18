@@ -192,4 +192,7 @@ def run_postseason(all_teams: List[Team], game_engine: GameEngine):
     nit = NITBracket(nit_teams, game_engine)
     nit_champion = nit.simulate()
 
-    return ncaa_champion, nit_champion
+    return {
+        'ncaa_champion': ncaa_champion,
+        'nit_champion': nit_champion
+    }

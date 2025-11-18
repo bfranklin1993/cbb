@@ -1041,17 +1041,112 @@ def recruiting_page():
 
 
 def run_postseason_tournaments():
-    """Run postseason"""
-    with st.spinner("Running postseason tournaments..."):
-        results = run_postseason(st.session_state.all_teams, st.session_state.game_engine)
-        st.session_state.tournament_results = results
+    """Run postseason with selection show"""
+    season = st.session_state.current_season
+    team = st.session_state.player_team
 
-    st.balloons()
-    st.success(f"**NCAA CHAMPION: {results['ncaa_champion'].name}** 🏆")
-    st.info(f"**NIT CHAMPION: {results['nit_champion'].name}**")
+    # Check if we need to show selection
+    if 'postseason_stage' not in st.session_state:
+        st.session_state.postseason_stage = 'selection'
 
-    if st.button("CONTINUE TO OFF-SEASON"):
-        advance_to_offseason()
+    if st.session_state.postseason_stage == 'selection':
+        # Selection Show
+        st.markdown("## 🏀 TOURNAMENT SELECTION SHOW")
+
+        # Sort teams by record
+        sorted_teams = sorted(st.session_state.all_teams,
+                             key=lambda t: (t.wins - t.losses, t.get_team_rating()),
+                             reverse=True)
+
+        # Top 68 go to NCAA
+        ncaa_teams = sorted_teams[:68]
+        nit_teams = sorted_teams[68:100]
+
+        # Find user's team
+        user_rank = next((i+1 for i, t in enumerate(sorted_teams) if t.name == team.name), None)
+        user_in_ncaa = team in ncaa_teams
+        user_in_nit = team in nit_teams
+
+        # Display selection
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("YOUR RANKING", f"#{user_rank}")
+            st.metric("YOUR RECORD", f"{team.wins}-{team.losses}")
+        with col2:
+            if user_in_ncaa:
+                st.success("**🏆 NCAA TOURNAMENT**")
+                seed = ncaa_teams.index(team) + 1
+                st.metric("SEED", f"#{seed}")
+            elif user_in_nit:
+                st.info("**NIT TOURNAMENT**")
+                seed = nit_teams.index(team) + 1
+                st.metric("SEED", f"#{seed}")
+            else:
+                st.error("**DID NOT QUALIFY**")
+
+        st.markdown("---")
+
+        # Show bracket previews
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### NCAA TOURNAMENT (68 teams)")
+            st.caption(f"Top Seeds: {', '.join([t.name for t in ncaa_teams[:4]])}")
+        with col2:
+            st.markdown("### NIT TOURNAMENT (32 teams)")
+            st.caption(f"Top Seeds: {', '.join([t.name for t in nit_teams[:4]])}")
+
+        if st.button("START TOURNAMENTS", type="primary", use_container_width=True):
+            st.session_state.postseason_stage = 'running'
+            st.rerun()
+
+    elif st.session_state.postseason_stage == 'running':
+        # Run tournaments
+        with st.spinner("Simulating NCAA and NIT Tournaments..."):
+            from tournament import NCAABracket, NITBracket
+
+            sorted_teams = sorted(st.session_state.all_teams,
+                                 key=lambda t: (t.wins - t.losses, t.get_team_rating()),
+                                 reverse=True)
+
+            ncaa_teams = sorted_teams[:68]
+            nit_teams = sorted_teams[68:100]
+
+            # Run NCAA
+            ncaa = NCAABracket(ncaa_teams, st.session_state.game_engine)
+            ncaa_champion = ncaa.simulate()
+
+            # Run NIT
+            nit = NITBracket(nit_teams, st.session_state.game_engine)
+            nit_champion = nit.simulate()
+
+            st.session_state.tournament_results = {
+                'ncaa_champion': ncaa_champion,
+                'nit_champion': nit_champion
+            }
+            st.session_state.postseason_stage = 'complete'
+            st.rerun()
+
+    elif st.session_state.postseason_stage == 'complete':
+        # Show results
+        st.balloons()
+        results = st.session_state.tournament_results
+
+        st.markdown("## 🏆 POSTSEASON RESULTS")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.success(f"**NCAA CHAMPION**")
+            st.markdown(f"# {results['ncaa_champion'].name}")
+            st.metric("Final Record", f"{results['ncaa_champion'].wins}-{results['ncaa_champion'].losses}")
+
+        with col2:
+            st.info(f"**NIT CHAMPION**")
+            st.markdown(f"# {results['nit_champion'].name}")
+            st.metric("Final Record", f"{results['nit_champion'].wins}-{results['nit_champion'].losses}")
+
+        if st.button("CONTINUE TO OFF-SEASON", type="primary", use_container_width=True):
+            st.session_state.postseason_stage = None
+            advance_to_offseason()
 
 
 def advance_to_offseason():
