@@ -303,7 +303,7 @@ def dashboard_page():
         st.metric("RATING", f"{team.get_team_rating():.1f}")
     with col4:
         if season:
-            st.metric("WEEK", f"{season.current_week}/{season.total_weeks}")
+            st.metric("WEEK", f"{season.current_week + 1}/{season.total_weeks}")
         else:
             st.metric("STATUS", "PRE-SEASON")
 
@@ -376,10 +376,14 @@ def dashboard_page():
                 run_postseason_tournaments()
         else:
             # DEBUG: Always show current state
-            st.error(f"🔍 STATE CHECK - Week: {season.current_week}/{season.total_weeks} | Games in Session: {len(st.session_state.played_games)} | Games in Season: {len(season.played_games)} | Your Record: {team.wins}-{team.losses}")
+            st.error(f"🔍 STATE CHECK - Week: {season.current_week + 1}/{season.total_weeks} | Games in Session: {len(st.session_state.played_games)} | Games in Season: {len(season.played_games)} | Your Record: {team.wins}-{team.losses}")
             if len(st.session_state.played_games) > 0:
                 recent = list(st.session_state.played_games)[-3:]
                 st.error(f"Last 3 games in tracker: {recent}")
+
+            # Additional debug: Show if sets match
+            if len(st.session_state.played_games) != len(season.played_games):
+                st.error(f"⚠️ WARNING: played_games mismatch! Session has {len(st.session_state.played_games)}, Season has {len(season.played_games)}")
 
             # Show next game info
             next_game = season.get_next_game_for_team(team)
@@ -387,7 +391,7 @@ def dashboard_page():
                 location = "vs" if next_game['is_home'] else "@"
                 conf_tag = " (CONFERENCE)" if next_game['is_conference'] else ""
                 st.info(f"**NEXT GAME:** {next_game['date']} • {location} {next_game['opponent'].name}{conf_tag}")
-                st.error(f"Next opponent details: Week {next_game['week']}, Home={next_game['is_home']}")
+                st.error(f"Next opponent details: Week {next_game['week'] + 1}, Home={next_game['is_home']}")
 
             # Simulation controls
             col1, col2 = st.columns(2)
@@ -396,7 +400,7 @@ def dashboard_page():
                     # Get the team object from season.all_teams (ensure same instance)
                     season_team = next((t for t in season.all_teams if t.name == team.name), team)
 
-                    st.write(f"DEBUG - Before sim: Week={season.current_week}, Played={len(season.played_games)}, Record={team.wins}-{team.losses}")
+                    st.write(f"DEBUG - Before sim: Week={season.current_week + 1}, Played={len(season.played_games)}, Record={team.wins}-{team.losses}")
                     st.write(f"DEBUG - Played games: {list(season.played_games)[:5]}")  # Show first 5
 
                     result = season.simulate_to_next_game(season_team)
@@ -408,14 +412,14 @@ def dashboard_page():
                         # Check if team has more games this week
                         next_game = season.get_next_game_for_team(season_team)
                         if next_game:
-                            st.write(f"DEBUG - Next game: {next_game['opponent'].name} at week {next_game['week']}")
+                            st.write(f"DEBUG - Next game: {next_game['opponent'].name} at week {next_game['week'] + 1}")
                         else:
                             st.write("DEBUG - No next game found")
 
                         if next_game is None or next_game['week'] > season.current_week:
                             # No more games this week, advance to next week
                             season.current_week += 1
-                            st.write(f"DEBUG - Advanced to week {season.current_week}")
+                            st.write(f"DEBUG - Advanced to week {season.current_week + 1}")
                             st.session_state.recruiting_actions_remaining = 5
                             # Update recruit interest levels each week
                             if st.session_state.recruiting_class is not None:
