@@ -1086,7 +1086,8 @@ def conference_tournament_page():
 
         # Show bracket seeding
         st.markdown("### TOURNAMENT SEEDING")
-        num_to_show = min(12, len(conf_teams))
+        num_teams = len(conf_teams)
+        num_to_show = min(12, num_teams)
         for i, t in enumerate(conf_teams[:num_to_show], 1):
             is_user = t.name == team.name
             marker = "**👤 YOU**" if is_user else ""
@@ -1094,22 +1095,164 @@ def conference_tournament_page():
 
         st.markdown("---")
 
-        # Tournament simulation button
+        # Tournament start button
         if st.button("START TOURNAMENT", type="primary", use_container_width=True):
-            with st.spinner(f"Simulating {team.conference} Tournament..."):
+            # Determine bracket format
+            if num_teams <= 8:
+                bracket_teams = conf_teams[:8]
+                rounds = ['QUARTERFINALS', 'SEMIFINALS', 'CHAMPIONSHIP']
+            elif num_teams <= 11:
+                bracket_teams = conf_teams[:8]
+                rounds = ['QUARTERFINALS', 'SEMIFINALS', 'CHAMPIONSHIP']
+            else:
+                bracket_teams = conf_teams[:12]
+                rounds = ['FIRST ROUND', 'QUARTERFINALS', 'SEMIFINALS', 'CHAMPIONSHIP']
+
+            # Store tournament state
+            st.session_state.tourney_teams = bracket_teams
+            st.session_state.tourney_rounds = rounds
+            st.session_state.tourney_current_round = 0
+            st.session_state.tourney_results = []
+            st.session_state.tourney_remaining_teams = bracket_teams.copy()
+            st.session_state.conf_tourney_stage = 'tournament'
+            st.rerun()
+
+    elif st.session_state.conf_tourney_stage == 'tournament':
+        # Interactive tournament bracket
+        rounds = st.session_state.tourney_rounds
+        current_round_idx = st.session_state.tourney_current_round
+        remaining_teams = st.session_state.tourney_remaining_teams
+
+        # Check if tournament is complete
+        if current_round_idx >= len(rounds):
+            # Tournament complete - run other conference tournaments
+            with st.spinner("Simulating other conference tournaments..."):
                 from tournament import run_conference_tournaments
 
-                # Run all conference tournaments
-                conference_champions = run_conference_tournaments(
-                    st.session_state.all_teams,
+                # Get all teams except user's conference
+                other_teams = [t for t in st.session_state.all_teams if t.conference != team.conference]
+                all_champions = run_conference_tournaments(
+                    other_teams,
                     st.session_state.game_engine
                 )
 
-                # Store results
-                st.session_state.conference_champions = conference_champions
+                # Add user's conference champion
+                all_champions[team.conference] = remaining_teams[0]
+
+                st.session_state.conference_champions = all_champions
                 st.session_state.conference_tournaments_complete = True
                 st.session_state.conf_tourney_stage = 'results'
                 st.rerun()
+            return
+
+        # Show current round
+        round_name = rounds[current_round_idx]
+        st.markdown(f"### {round_name}")
+        st.caption(f"Round {current_round_idx + 1} of {len(rounds)}")
+
+        # Show previous round results if any
+        if st.session_state.tourney_results:
+            with st.expander("📊 Previous Round Results", expanded=False):
+                for prev_round in st.session_state.tourney_results:
+                    st.markdown(f"**{prev_round['name']}**")
+                    for game in prev_round['games']:
+                        winner_mark_1 = "✓" if game['winner'] == game['team1'] else ""
+                        winner_mark_2 = "✓" if game['winner'] == game['team2'] else ""
+                        st.caption(f"{winner_mark_1} {game['team1']:30} {game['score1']:3}")
+                        st.caption(f"{winner_mark_2} {game['team2']:30} {game['score2']:3}")
+                    st.markdown("---")
+
+        # Create matchups for current round
+        num_teams = len(remaining_teams)
+
+        if round_name == 'FIRST ROUND':
+            # 12-team bracket: seeds 5-12 play
+            bye_teams = remaining_teams[:4]
+            playing_teams = remaining_teams[4:12]
+            matchups = [
+                (playing_teams[0], playing_teams[7]),  # 5 vs 12
+                (playing_teams[1], playing_teams[6]),  # 6 vs 11
+                (playing_teams[2], playing_teams[5]),  # 7 vs 10
+                (playing_teams[3], playing_teams[4])   # 8 vs 9
+            ]
+            st.info("Top 4 seeds receive first-round byes")
+        elif round_name == 'QUARTERFINALS':
+            if len(st.session_state.tourney_teams) > 8:
+                # 12-team bracket: pair byes with first round winners
+                bye_teams = st.session_state.tourney_teams[:4]
+                first_round_winners = remaining_teams[4:]  # Winners from first round
+                matchups = [
+                    (bye_teams[0], first_round_winners[3]),  # 1 vs 8/9
+                    (bye_teams[1], first_round_winners[2]),  # 2 vs 7/10
+                    (bye_teams[2], first_round_winners[1]),  # 3 vs 6/11
+                    (bye_teams[3], first_round_winners[0])   # 4 vs 5/12
+                ]
+            else:
+                # 8-team bracket
+                matchups = [
+                    (remaining_teams[0], remaining_teams[7]),  # 1 vs 8
+                    (remaining_teams[1], remaining_teams[6]),  # 2 vs 7
+                    (remaining_teams[2], remaining_teams[5]),  # 3 vs 6
+                    (remaining_teams[3], remaining_teams[4])   # 4 vs 5
+                ]
+        else:
+            # SEMIFINALS or CHAMPIONSHIP - pair sequentially
+            matchups = []
+            for i in range(0, len(remaining_teams), 2):
+                if i + 1 < len(remaining_teams):
+                    matchups.append((remaining_teams[i], remaining_teams[i + 1]))
+
+        # Display matchups
+        st.markdown("#### Matchups")
+        for i, (team1, team2) in enumerate(matchups, 1):
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                is_user = team1.name == team.name
+                marker = "👤" if is_user else ""
+                st.caption(f"**{team1.name}** {marker}")
+                st.caption(f"Record: {team1.wins}-{team1.losses}")
+            with col2:
+                is_user = team2.name == team.name
+                marker = "👤" if is_user else ""
+                st.caption(f"**{team2.name}** {marker}")
+                st.caption(f"Record: {team2.wins}-{team2.losses}")
+            st.markdown("---")
+
+        # Simulate round button
+        if st.button(f"SIMULATE {round_name}", type="primary", use_container_width=True):
+            game_engine = st.session_state.game_engine
+            round_results = {
+                'name': round_name,
+                'games': []
+            }
+            winners = []
+
+            for team1, team2 in matchups:
+                result = game_engine.simulate_game_with_details(team1, team2)
+                winner = team1 if result['home_score'] > result['away_score'] else team2
+                winners.append(winner)
+
+                round_results['games'].append({
+                    'team1': team1.name,
+                    'team2': team2.name,
+                    'score1': result['home_score'],
+                    'score2': result['away_score'],
+                    'winner': winner.name
+                })
+
+            # Update state
+            st.session_state.tourney_results.append(round_results)
+
+            # Handle byes for 12-team bracket
+            if round_name == 'FIRST ROUND':
+                # Add bye teams to winners
+                bye_teams = st.session_state.tourney_teams[:4]
+                st.session_state.tourney_remaining_teams = bye_teams + winners
+            else:
+                st.session_state.tourney_remaining_teams = winners
+
+            st.session_state.tourney_current_round += 1
+            st.rerun()
 
     elif st.session_state.conf_tourney_stage == 'results':
         # Show results
@@ -1124,8 +1267,26 @@ def conference_tournament_page():
             st.info(f"**{team.conference} Champion:** {champion.name}")
             st.caption("You'll need an at-large bid for the NCAA Tournament")
 
+        # Show tournament results
+        if 'tourney_results' in st.session_state:
+            st.markdown("---")
+            st.markdown("### YOUR TOURNAMENT RESULTS")
+            for round_data in st.session_state.tourney_results:
+                st.markdown(f"**{round_data['name']}**")
+                for game in round_data['games']:
+                    winner_mark_1 = "✓ " if game['winner'] == game['team1'] else "   "
+                    winner_mark_2 = "✓ " if game['winner'] == game['team2'] else "   "
+
+                    # Highlight user's games
+                    is_user_game = (game['team1'] == team.name or game['team2'] == team.name)
+                    if is_user_game:
+                        st.success(f"{winner_mark_1}{game['team1']:30} {game['score1']:3}\n{winner_mark_2}{game['team2']:30} {game['score2']:3}")
+                    else:
+                        st.caption(f"{winner_mark_1}{game['team1']:30} {game['score1']:3}")
+                        st.caption(f"{winner_mark_2}{game['team2']:30} {game['score2']:3}")
+                st.markdown("---")
+
         # Show all conference champions
-        st.markdown("---")
         st.markdown("### ALL CONFERENCE CHAMPIONS")
         for conf_name in sorted(st.session_state.conference_champions.keys())[:10]:
             champ = st.session_state.conference_champions[conf_name]
