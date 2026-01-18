@@ -93,7 +93,7 @@ st.markdown("""
     /* Info boxes */
     .info-box {
         background-color: #1a1a2e;
-        border-left: 4px solid: #ff6b35;
+        border-left: 4px solid #ff6b35;
         padding: 12px;
         border-radius: 4px;
         margin: 12px 0;
@@ -375,19 +375,12 @@ def dashboard_page():
             if st.button("🏆 POSTSEASON", type="primary", use_container_width=True):
                 run_postseason_tournaments()
         else:
-            # DEBUG: Always show current state
-            st.error(f"🔍 STATE CHECK - Week: {season.current_week}/{season.total_weeks} | Games in Session: {len(st.session_state.played_games)} | Games in Season: {len(season.played_games)} | Your Record: {team.wins}-{team.losses}")
-            if len(st.session_state.played_games) > 0:
-                recent = list(st.session_state.played_games)[-3:]
-                st.error(f"Last 3 games in tracker: {recent}")
-
             # Show next game info
             next_game = season.get_next_game_for_team(team)
             if next_game:
                 location = "vs" if next_game['is_home'] else "@"
                 conf_tag = " (CONFERENCE)" if next_game['is_conference'] else ""
                 st.info(f"**NEXT GAME:** {next_game['date']} • {location} {next_game['opponent'].name}{conf_tag}")
-                st.error(f"Next opponent details: Week {next_game['week']}, Home={next_game['is_home']}")
 
             # Simulation controls
             col1, col2 = st.columns(2)
@@ -396,26 +389,16 @@ def dashboard_page():
                     # Get the team object from season.all_teams (ensure same instance)
                     season_team = next((t for t in season.all_teams if t.name == team.name), team)
 
-                    st.write(f"DEBUG - Before sim: Week={season.current_week}, Played={len(season.played_games)}, Record={team.wins}-{team.losses}")
-                    st.write(f"DEBUG - Played games: {list(season.played_games)[:5]}")  # Show first 5
-
                     result = season.simulate_to_next_game(season_team)
                     if result:
                         st.session_state.last_results = [result]
-                        st.write(f"DEBUG - Just played: {result['home_team']} vs {result['away_team']}")
-                        st.write(f"DEBUG - After sim: Played={len(season.played_games)}")
 
                         # Check if team has more games this week
                         next_game = season.get_next_game_for_team(season_team)
-                        if next_game:
-                            st.write(f"DEBUG - Next game: {next_game['opponent'].name} at week {next_game['week']}")
-                        else:
-                            st.write("DEBUG - No next game found")
 
                         if next_game is None or next_game['week'] > season.current_week:
                             # No more games this week, advance to next week
                             season.current_week += 1
-                            st.write(f"DEBUG - Advanced to week {season.current_week}")
                             st.session_state.recruiting_actions_remaining = 5
                             # Update recruit interest levels each week
                             if st.session_state.recruiting_class is not None:
